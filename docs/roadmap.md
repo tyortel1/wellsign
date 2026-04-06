@@ -2,20 +2,42 @@
 
 > Everything the document review and competitor research surfaced as missing or wrong, but **deliberately not in v1**. This is the v2/v3 wishlist. Items here are NOT designed yet — they're problems to solve, not specs.
 
-## v1 scope (what we're shipping first)
+## v1 scope — current status
 
+### Done
 - ✅ Local PySide6 desktop, SQLite, per-project license keys
 - ✅ Schema (`schema.sql`), migrate runner, demo seed
 - ✅ AES-256-GCM PII column encryption with keyring master key
 - ✅ RSA-3072 PSS license verification, bundled public key
-- ✅ Project / Investor / Document / Email / Send / Status / Burndown tab shells
-- ✅ NavigatorTree + DashboardPage + ProjectWorkspace
-- ⏳ Real Project Setup form (currently a stub)
-- ⏳ Real Investors tab (Excel import + manual add + WI% sum validation)
-- ⏳ pypdf form-field merge → generate per-investor packets
-- ⏳ Outlook COM send via `email_/`
-- ⏳ Status grid + per-investor reminder one-click
-- ⏳ Burndown chart vs. close deadline
+- ✅ NavigatorTree + DashboardPage + ProjectWorkspace + WorkflowsPage
+- ✅ DocTemplatesPage + NewDocTemplateDialog (PDF browse + form-field detection)
+- ✅ EmailTemplatesPage + NewEmailTemplateDialog
+- ✅ NewProjectDialog with license-file verify + workflow picker
+- ✅ Workflow engine: workflows / stages / stage_doc_templates / stage_email_templates / investor_stage_runs tables and CRUD
+- ✅ WorkflowsPage with drag-drop reorderable stage cards
+- ✅ Multi-select TemplatePickerDialog for batch attaching docs/emails to stages
+- ✅ **Phases subsystem** (`db/phases.py`) — 7-state operator lifecycle with phase banner, Advance/Set Phase buttons, color-coded navigator dots
+- ✅ **AFE Costs subsystem** (`db/costs.py` + `CostsTab` + `CostLineDialog`) — line items with vendor/status, receipt attachments, variance coloring, totals row
+- ✅ Default "Standard Paloma Closing" workflow seeded with 4 stages and all the right docs/emails attached
+- ✅ Real ProjectSetupTab (read-only summary) with traffic-light counts in the phase banner
+- ✅ Real InvestorsTab (table view) with traffic lights + WI sum validation
+- ✅ Demo data with 5 investors at varying stage timing for traffic light demo + 10 realistic AFE cost lines
+
+### Still placeholder / not built
+- ⏳ Editable Project Setup form (currently read-only summary)
+- ⏳ NewInvestorDialog + Excel import wiring on InvestorsTab
+- ⏳ pypdf form-field MERGE (only field READ exists today via `pdf_/fields.py`)
+- ⏳ Real DocumentsTab — generate filled per-investor packets
+- ⏳ Outlook COM wrapper in `email_/`
+- ⏳ Real SendTab — pick investors, preview, fire
+- ⏳ Real StatusTab — per-investor doc grid + reminder one-click
+- ⏳ Real BurndownTab — completion-over-time chart vs close deadline
+- ⏳ Real `insert_investor()` creates `investor_stage_runs` (currently only the seed does)
+- ⏳ Exit-condition enforcement on workflow stages (auto-advance when all_docs_signed / llg_and_dhc_paid)
+- ⏳ Reminder scheduler that honors `wait_days`
+- ⏳ Audit log writes (table + triggers exist, no callers)
+- ⏳ Surplus / supplemental cash call calculator (the Costs tab subtitle promises this)
+- ⏳ Migration runner upgrade (current dumb idempotent script breaks on returning installs after schema additions)
 
 ## v2 — research-driven additions
 
@@ -70,11 +92,13 @@ v1 collapses these into a single `wi_percent`. v2 should split.
 
 **Schema impact:** add `wi_percent_bcp`, `wi_percent_acp`, `nri_percent` to investors (or to `project_participations` once that lands). Drop `wi_percent` after migration.
 
-### 5. Cash call line items
+### 5. ~~Cash call line items~~ — DONE as the AFE Costs subsystem
 
-Cash Call C-2 has 21 line items per project (drilling turnkey, electric logging, P&A services, etc.) that sum to the total DHC. Currently the operator manages this outside the system; the C-2 PDF arrives pre-built.
+**Status: shipped.** The `cost_line_items` and `cost_attachments` tables, `db/costs.py`, `CostsTab`, and `CostLineDialog` together provide per-project line-item budget tracking with vendor, status (planned/committed/invoiced/paid), and receipt attachments.
 
-**Schema impact:** new table `cash_call_line_items(project_id, cash_call_type, category, description, amount)`. UI: line-item editor on the Project Setup tab.
+The original idea was to model the C-2 cash call breakdown specifically. What landed is broader — full AFE budget vs actuals tracking through the entire well lifecycle, not just the cash call. Variance is colored red/green and totaled at the bottom of the Costs tab.
+
+**What's still missing related to this:** the **surplus / supplemental cash call calculator** that the Costs tab subtitle promises. When the well finishes drilling and actuals are in, the operator should see "you collected $X DHC, spent $Y, surplus to refund = $Z" or "supplemental needed = $Z". The data is there; the math + UI isn't.
 
 ### 6. Supplemental AFE versioning
 
