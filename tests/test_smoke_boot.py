@@ -23,8 +23,9 @@ def test_main_window_boots(qtbot):
     qtbot.addWidget(win)
     win.show()
     # New structure: navigator on the left, stacked pages on the right.
+    # Pages: Dashboard, ProjectWorkspace, DocTemplates, EmailTemplates, Workflows
     assert win.navigator is not None
-    assert win.stack.count() == 4
+    assert win.stack.count() == 5
     assert win.windowTitle().startswith("WellSign")
     QTimer.singleShot(50, win.close)
     qtbot.waitUntil(lambda: not win.isVisible(), timeout=2000)

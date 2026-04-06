@@ -24,7 +24,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from wellsign.db.templates import list_doc_templates, list_email_templates
 from wellsign.db.workflows import (
     EXIT_LABELS,
     ExitCondition,
@@ -42,6 +41,7 @@ from wellsign.db.workflows import (
     reorder_stages,
     update_stage,
 )
+from wellsign.ui.dialogs import PickerMode, TemplatePickerDialog
 
 
 # ===========================================================================
@@ -208,47 +208,24 @@ class StageCard(QFrame):
         self.changed.emit()
 
     def _on_add_doc(self) -> None:
-        templates = list_doc_templates()
-        if not templates:
-            QMessageBox.information(self, "No templates", "Create a document template first.")
-            return
-        names = [t.name for t in templates]
-        choice, ok = QInputDialog.getItem(
-            self, "Add document to stage", "Document template:", names, 0, False
-        )
-        if not ok:
-            return
-        for t in templates:
-            if t.name == choice:
-                attach_doc_to_stage(self._stage.id, t.id)
-                self.changed.emit()
-                return
+        dlg = TemplatePickerDialog(self, mode=PickerMode.DOCS)
+        if dlg.exec() and dlg.result is not None:
+            for tid in dlg.result.template_ids:
+                attach_doc_to_stage(self._stage.id, tid)
+            self.changed.emit()
 
     def _on_remove_doc(self, item_id: str) -> None:
         detach_doc_from_stage(item_id)
         self.changed.emit()
 
     def _on_add_email(self) -> None:
-        templates = list_email_templates()
-        if not templates:
-            QMessageBox.information(self, "No templates", "Create an email template first.")
-            return
-        names = [t.name for t in templates]
-        choice, ok = QInputDialog.getItem(
-            self, "Add email to stage", "Email template:", names, 0, False
-        )
-        if not ok:
-            return
-        wait, ok2 = QInputDialog.getInt(
-            self, "Wait days", "Days to wait after stage entry before this email:", 0, 0, 365, 1
-        )
-        if not ok2:
-            return
-        for t in templates:
-            if t.name == choice:
-                attach_email_to_stage(self._stage.id, t.id, wait_days=wait)
-                self.changed.emit()
-                return
+        dlg = TemplatePickerDialog(self, mode=PickerMode.EMAILS)
+        if dlg.exec() and dlg.result is not None:
+            for tid in dlg.result.template_ids:
+                attach_email_to_stage(
+                    self._stage.id, tid, wait_days=dlg.result.wait_days
+                )
+            self.changed.emit()
 
 
 # ===========================================================================
