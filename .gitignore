@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# WellSign — never commit these
+secrets/
+*.pem
+*.key
+private_key*
+license_keys/issued/
+*.wsdb
+*.wsdb-journal
+*.wsdb-wal
+*.wsdb-shm
+*.wslicense
+
+# EXCEPTION: the bundled public key MUST ship with the app so license verify works
+!src/wellsign/resources/license_public_key.pem
+
+# Real investor reference PDFs — kept locally, never committed
+docs/reference/
+
+# Real investor data — never commit
+sample_data/real/
+*_REAL.xlsx
+*_REAL.pdf
+
+# Local app data path (if anyone runs from inside the repo)
+appdata/
