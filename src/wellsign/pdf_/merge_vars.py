@@ -205,3 +205,108 @@ def grouped() -> dict[str, list[MergeVar]]:
     for v in MERGE_VARIABLES:
         out.setdefault(v.group, []).append(v)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Smart-map: heuristic PDF-field-name → merge-variable-key matching
+# ---------------------------------------------------------------------------
+# For each merge variable key, we list a handful of common aliases that real
+# PDF templates use for that concept. The matcher normalises both sides
+# (lowercase, strip non-alphanumerics) and then tries:
+#   1. Exact normalised match against an alias
+#   2. Exact normalised match against the merge variable key itself
+#   3. Longest substring overlap with any alias
+#
+# Hand-curated and conservative — when in doubt, return None.
+_AUTO_MATCH_ALIASES: dict[str, list[str]] = {
+    "investor_name":          ["name", "investor", "investorname", "fullname", "client", "clientname", "subscriber"],
+    "investor_first_name":    ["first", "firstname", "fname", "given", "givenname"],
+    "investor_last_name":     ["last", "lastname", "lname", "surname", "family", "familyname"],
+    "investor_entity":        ["entity", "entityname", "company", "companyname", "llc", "trust", "ira", "fund", "partnership"],
+    "investor_title":         ["title", "position", "role", "signingtitle", "signertitle"],
+    "investor_email":         ["email", "emailaddress", "mail", "contactemail"],
+    "investor_phone":         ["phone", "phonenumber", "telephone", "cell", "mobile", "tel", "contactphone"],
+    "investor_address":       ["address", "fulladdress", "mailingaddress"],
+    "investor_address1":      ["address1", "addressline1", "street", "streetaddress", "addr1", "line1"],
+    "investor_address2":      ["address2", "addressline2", "addr2", "line2", "apt", "suite", "unit", "ste"],
+    "investor_city":          ["city", "town"],
+    "investor_state":         ["state", "province", "investorstate"],
+    "investor_zip":           ["zip", "zipcode", "postal", "postalcode", "postcode"],
+    "investor_wi_percent":    ["wi", "wipct", "wipercent", "workinginterest", "wifraction", "interest", "interestpct"],
+    "investor_wi_percent_display": ["widisplay", "interestdisplay", "wipctdisplay"],
+    "llg_amount":             ["llg", "llgamount", "leaseholdcost", "deckeramount", "c1", "c1amount", "cashcall1"],
+    "dhc_amount":             ["dhc", "dhcamount", "dryholecost", "palomaamount", "c2", "c2amount", "cashcall2"],
+    "investor_payment_preference": ["payment", "paymentmethod", "paymentpref", "wireorcheck", "method"],
+    "project_name":           ["project", "projectname"],
+    "prospect_name":          ["prospect", "prospectname", "play", "playname"],
+    "well_name":              ["well", "wellname", "wellbore"],
+    "operator_name":          ["operator", "operatorname", "operatorllc", "operatingcompany"],
+    "county_state":           ["countystate", "location", "countyandstate"],
+    "agreement_date":         ["agreement", "agreementdate", "execdate", "executiondate", "effective", "effectivedate"],
+    "close_deadline":         ["close", "closedeadline", "closingdate", "closing", "deadline", "duedate", "dueby"],
+    "total_llg_cost":         ["totalllg", "totalleasehold", "llgtotal", "leaseholdtotal"],
+    "total_dhc_cost":         ["totaldhc", "totaldryhole", "dhctotal", "dryholetotal"],
+    "payee_c1":               ["c1payee", "deckerpayee", "leaseholdpayee"],
+    "payee_c2":               ["c2payee", "operatorpayee", "dryholepayee"],
+}
+
+
+def _normalize_name(s: str) -> str:
+    return "".join(c for c in (s or "").lower() if c.isalnum())
+
+
+def auto_match_field(pdf_field_name: str) -> str | None:
+    """Guess the best merge variable key for a PDF form field name.
+
+    Returns the matched key, or ``None`` if no confident match could be made.
+    Used by the field-mapping dialog's Smart Map button.
+
+    Strategy:
+      1. Exact match against any alias (any length)
+      2. Exact match against a merge variable key itself
+      3. Substring overlap — but only if the input has more than 3
+         characters, to avoid 2-char field names like ``St`` matching
+         the substring of every long alias.
+    """
+    norm = _normalize_name(pdf_field_name)
+    if not norm:
+        return None
+
+    # 1. Exact match against any alias
+    for var_key, aliases in _AUTO_MATCH_ALIASES.items():
+        for alias in aliases:
+            if _normalize_name(alias) == norm:
+                return var_key
+
+    # 2. Exact match against the merge variable key itself
+    for k in MERGE_VARS_BY_KEY:
+        if _normalize_name(k) == norm:
+            return k
+
+    # 3. Substring overlap — only for inputs of meaningful length
+    if len(norm) <= 3:
+        return None
+
+    best_key: str | None = None
+    best_len = 0
+    for var_key, aliases in _AUTO_MATCH_ALIASES.items():
+        for alias in aliases:
+            na = _normalize_name(alias)
+            if len(na) < 4:
+                continue  # avoid noisy 1-3 char alias matches in substring mode
+            if na in norm or norm in na:
+                # Score by the length of the alias — prefer longer, more specific aliases
+                if len(na) > best_len:
+                    best_len = len(na)
+                    best_key = var_key
+    return best_key
+
+
+def auto_match_all(pdf_field_names: list[str]) -> dict[str, str]:
+    """Run auto_match_field over a batch — returns ``{pdf_field: merge_key}`` only for matches."""
+    out: dict[str, str] = {}
+    for name in pdf_field_names:
+        match = auto_match_field(name)
+        if match:
+            out[name] = match
+    return out

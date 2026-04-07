@@ -24,6 +24,7 @@ from datetime import date, datetime
 
 from wellsign.db.investors import InvestorRow, get_investor, list_investors
 from wellsign.db.migrate import connect
+from wellsign.util.audit import log_action
 
 
 PAYMENT_TYPES = [
@@ -302,6 +303,21 @@ def mark_received(
         conn.commit()
     result = get_payment(payment_id)
     assert result is not None
+    log_action(
+        "payment_received",
+        project_id=existing.project_id,
+        investor_id=existing.investor_id,
+        target_type="payment",
+        target_id=payment_id,
+        metadata={
+            "payment_type": existing.payment_type,
+            "payee": existing.payee,
+            "expected_amount": existing.expected_amount,
+            "received_amount": received_amount,
+            "method": method,
+            "status": new_status,
+        },
+    )
     return result
 
 

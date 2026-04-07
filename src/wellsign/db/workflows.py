@@ -445,6 +445,7 @@ def advance_investor_stage(investor_id: str) -> StageRunRow | None:
     final stage of the workflow.
     """
     from wellsign.db.projects import get_project
+    from wellsign.util.audit import log_action
 
     current = get_active_run(investor_id)
     if current is None:
@@ -465,12 +466,34 @@ def advance_investor_stage(investor_id: str) -> StageRunRow | None:
     complete_run(current.id)
 
     if next_stage is None:
+        log_action(
+            "stage_completed_terminal",
+            project_id=current.project_id,
+            investor_id=investor_id,
+            target_type="stage_run",
+            target_id=current.id,
+            metadata={"stage_name": current_stage.name},
+        )
         return None
 
     new_run = insert_stage_run(
         investor_id=investor_id,
         project_id=current.project_id,
         stage_id=next_stage.id,
+    )
+
+    log_action(
+        "stage_advanced",
+        project_id=current.project_id,
+        investor_id=investor_id,
+        target_type="stage_run",
+        target_id=new_run.id,
+        metadata={
+            "from_stage": current_stage.name,
+            "to_stage": next_stage.name,
+            "from_stage_id": current_stage.id,
+            "to_stage_id": next_stage.id,
+        },
     )
 
     project = get_project(current.project_id)
@@ -501,6 +524,8 @@ def _auto_generate_stage_docs(project, investor_id: str, stage: "StageRow") -> N
 
 def revert_investor_stage(investor_id: str) -> StageRunRow | None:
     """Move the investor back one stage. Opposite of advance_investor_stage."""
+    from wellsign.util.audit import log_action
+
     current = get_active_run(investor_id)
     if current is None:
         return None
@@ -516,11 +541,23 @@ def revert_investor_stage(investor_id: str) -> StageRunRow | None:
     if prev_stage is None:
         return None
     set_run_status(current.id, "skipped")
-    return insert_stage_run(
+    new_run = insert_stage_run(
         investor_id=investor_id,
         project_id=current.project_id,
         stage_id=prev_stage.id,
     )
+    log_action(
+        "stage_reverted",
+        project_id=current.project_id,
+        investor_id=investor_id,
+        target_type="stage_run",
+        target_id=new_run.id,
+        metadata={
+            "from_stage": current_stage.name,
+            "to_stage": prev_stage.name,
+        },
+    )
+    return new_run
 
 
 def _to_run(row: sqlite3.Row) -> StageRunRow:

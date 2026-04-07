@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 
 from wellsign.db.templates import DocTemplateRow, update_doc_template_mapping
 from wellsign.pdf_.fields import read_form_fields
-from wellsign.pdf_.merge_vars import grouped as grouped_vars
+from wellsign.pdf_.merge_vars import auto_match_field, grouped as grouped_vars
 
 _BINDING_ROLE = Qt.ItemDataRole.UserRole + 1
 _FIELD_NAME_ROLE = Qt.ItemDataRole.UserRole + 2
@@ -104,6 +104,15 @@ class FieldMappingDialog(QDialog):
         left.addWidget(self.fields_tree, 1)
 
         clear_row = QHBoxLayout()
+        self.smart_map_btn = QPushButton("✨  Smart Map")
+        self.smart_map_btn.setProperty("secondary", True)
+        self.smart_map_btn.setToolTip(
+            "Auto-guess merge variables for every PDF field based on its name.\n"
+            "Existing bindings are kept; only blank fields get filled in."
+        )
+        self.smart_map_btn.clicked.connect(self._on_smart_map)
+        clear_row.addWidget(self.smart_map_btn)
+
         self.clear_btn = QPushButton("Clear binding")
         self.clear_btn.setProperty("secondary", True)
         self.clear_btn.clicked.connect(self._on_clear)
@@ -256,6 +265,45 @@ class FieldMappingDialog(QDialog):
         field_item.setText(1, "—")
         field_item.setData(0, _BINDING_ROLE, "")
         field_item.setForeground(1, Qt.GlobalColor.gray)
+
+    def _on_smart_map(self) -> None:
+        """Walk every PDF-field row and apply auto_match_field for unmapped ones.
+
+        Existing bindings are preserved — Smart Map only fills in blanks. The
+        operator can clear a binding first if they want Smart Map to override.
+        """
+        matched_count = 0
+        skipped_already_bound = 0
+        no_match_count = 0
+        for i in range(self.fields_tree.topLevelItemCount()):
+            item = self.fields_tree.topLevelItem(i)
+            if item is None or item.isDisabled():
+                continue
+            field_name = item.data(0, _FIELD_NAME_ROLE)
+            if not field_name:
+                continue
+            existing = self._mapping.get(field_name, "")
+            if existing:
+                skipped_already_bound += 1
+                continue
+            guess = auto_match_field(field_name)
+            if guess is None:
+                no_match_count += 1
+                continue
+            self._mapping[field_name] = guess
+            item.setText(1, guess)
+            item.setData(0, _BINDING_ROLE, guess)
+            item.setForeground(1, Qt.GlobalColor.darkGreen)
+            matched_count += 1
+
+        QMessageBox.information(
+            self,
+            "Smart Map results",
+            f"<b>{matched_count}</b> field(s) auto-mapped.<br>"
+            f"<b>{skipped_already_bound}</b> already had a binding (left untouched).<br>"
+            f"<b>{no_match_count}</b> field(s) had no confident match — bind those manually.<br><br>"
+            "Click <b>Save Mapping</b> to persist, or keep editing."
+        )
 
     def _on_save(self) -> None:
         update_doc_template_mapping(self._template.id, self._mapping)

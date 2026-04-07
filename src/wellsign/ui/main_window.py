@@ -17,7 +17,7 @@ Layout::
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QLabel,
@@ -56,6 +56,7 @@ class MainWindow(QMainWindow):
         self._build_central()
         self._build_statusbar()
         self._wire()
+        self._start_reminder_scheduler()
 
         # Trigger initial selection so the right pane shows something useful.
         self.navigator.refresh_projects()
@@ -150,12 +151,71 @@ class MainWindow(QMainWindow):
     # ---- status bar -----------------------------------------------------
     def _build_statusbar(self) -> None:
         sb = self.statusBar()
+
+        # Pending reminders pill — left side, click-to-jump (TODO)
+        self.pending_label = QLabel("")
+        self.pending_label.setStyleSheet(
+            "color: #5b6473; padding: 0 10px; font-weight: 600;"
+        )
+        sb.addWidget(self.pending_label)
+
         self.db_path_label = QLabel(f"DB: {database_path()}")
         font = QFont(self.db_path_label.font())
         font.setPointSize(8)
         self.db_path_label.setFont(font)
         sb.addPermanentWidget(self.db_path_label)
         sb.showMessage("Ready.", 3000)
+
+    # ---- reminder scheduler ---------------------------------------------
+    def _start_reminder_scheduler(self) -> None:
+        """Background QTimer that polls compute_pending_sends every 5 minutes
+        and updates the status bar with the overdue / due counts.
+
+        This is the closest thing to a "reminder scheduler" the app has —
+        it doesn't auto-send anything (the operator wants review of every
+        email before it goes out), but it makes overdue work visible
+        without the operator having to open the Send tab.
+        """
+        self._reminder_timer = QTimer(self)
+        self._reminder_timer.setInterval(5 * 60 * 1000)  # 5 minutes
+        self._reminder_timer.timeout.connect(self._refresh_pending_count)
+        self._reminder_timer.start()
+        # Initial tick so the status bar populates immediately on launch
+        self._refresh_pending_count()
+
+    def _refresh_pending_count(self) -> None:
+        """Walk every active project, sum overdue + due email counts, render."""
+        from wellsign.db.projects import list_projects
+        from wellsign.db.workflows import compute_pending_sends
+
+        overdue = 0
+        due = 0
+        for proj in list_projects():
+            if proj.status not in ("active", "draft"):
+                continue
+            try:
+                for ps in compute_pending_sends(proj.id):
+                    if ps.status == "overdue":
+                        overdue += 1
+                    elif ps.status == "due":
+                        due += 1
+            except Exception:
+                # Don't let one broken project hose the whole status bar
+                continue
+
+        if overdue == 0 and due == 0:
+            self.pending_label.setText("")
+            return
+        bits: list[str] = []
+        if overdue > 0:
+            bits.append(
+                f"<span style='color:#d1242f;'>📧 {overdue} overdue</span>"
+            )
+        if due > 0:
+            bits.append(
+                f"<span style='color:#d97706;'>📧 {due} due</span>"
+            )
+        self.pending_label.setText("  ·  ".join(bits))
 
     # ---- signals --------------------------------------------------------
     def _wire(self) -> None:

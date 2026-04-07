@@ -422,3 +422,100 @@ def _seed_demo_project_with_runs() -> None:
             vendor=vendor,
             status=status,
         )
+
+    # ------------------------------------------------------------------
+    # Second demo project — different phase, smaller raise, fewer
+    # investors. Lets the navigator show 2 colored dots and demos the
+    # cross-project comparison view on the Projects dashboard.
+    # ------------------------------------------------------------------
+    project2 = insert_project(
+        name="Frio Wildcat #2 (Demo)",
+        region="Atascosa County, TX",
+        well_name="Buchanan-Vela #1H",
+        license_key_hash=_DEMO_LICENSE_HASH,
+        license_customer="Paloma Operating LLC (Demo)",
+        license_issued_at=issued,
+        license_expires_at=expires,
+        license_key_id="demo-key-0002",
+        is_test=True,
+    )
+
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE projects
+               SET total_llg_cost = 800000.00,
+                   total_dhc_cost = 1500000.00,
+                   operator_llc = 'Paloma Operating LLC',
+                   prospect_name = 'Frio Wildcat',
+                   county = 'Atascosa',
+                   state = 'TX',
+                   agreement_date = ?,
+                   close_deadline = ?,
+                   workflow_id = ?,
+                   phase = 'soliciting',
+                   phase_entered_at = ?
+             WHERE id = ?
+            """,
+            (
+                (now - timedelta(days=4)).date().isoformat(),
+                (now + timedelta(days=45)).date().isoformat(),
+                workflow.id if workflow else None,
+                (now - timedelta(days=4)).isoformat(timespec="seconds"),
+                project2.id,
+            ),
+        )
+        conn.commit()
+
+    # 3 investors, all in the Outreach (stage 1) phase at varying ages.
+    LLG2 = 800000.00
+    DHC2 = 1500000.00
+    sol_stage = stages[0] if stages else None
+    project2_investors = [
+        # (last, first, entity, email, city, state, wi%, days_in_stage)
+        ("Hartwell",  "Joel",      None,                          "joel.hartwell@example.com",  "Pleasanton", "TX", 0.20000000,  1),
+        ("Ortega",    None,        "Ortega Holdings LLC",         "kim@ortega-holdings.com",    "Jourdanton", "TX", 0.15000000,  3),
+        ("Quinn",     "Lila",      None,                          "lila.quinn@example.com",     "Three Rivers","TX", 0.10000000,  6),
+    ]
+    for last, first, entity, email, city, state, wi, days_offset in project2_investors:
+        inv = insert_investor(
+            project_id=project2.id,
+            first_name=first,
+            last_name=last,
+            entity_name=entity,
+            email=email,
+            city=city,
+            state=state,
+            wi_percent=wi,
+            llg_amount=round(wi * LLG2, 2),
+            dhc_amount=round(wi * DHC2, 2),
+            payment_preference="wire" if entity else "check",
+        )
+        if sol_stage is not None:
+            insert_stage_run(
+                investor_id=inv.id,
+                project_id=project2.id,
+                stage_id=sol_stage.id,
+                entered_at=datetime.utcnow() - timedelta(days=days_offset),
+            )
+
+    # Sparse cost setup — only the pre-drilling planning lines have entries.
+    project2_costs = [
+        ("pre_drilling", "intangible", "Lease Bonus",          "Lease bonus — 160 acres @ $500/ac",            80000.00,  80000.00, "Various mineral owners",   "paid"),
+        ("pre_drilling", "intangible", "Title Work",           "Title opinions",                              15000.00,      None, "Brennan Title Co.",        "committed"),
+        ("pre_drilling", "intangible", "Permits / Regulatory", "RRC application",                             20000.00,      None, "Texas RRC",                "planned"),
+        ("pre_drilling", "intangible", "Surveying",            "Pre-spud survey",                             12000.00,      None, "Twin Lakes Surveying",     "planned"),
+        ("pre_drilling", "intangible", "Site Prep",            "Pad construction (estimate)",                120000.00,      None, "Karnes Earthworks LLC",    "planned"),
+    ]
+    for phase, tax, category, description, expected, actual, vendor, status in project2_costs:
+        insert_cost_line(
+            project_id=project2.id,
+            phase_group=phase,
+            tax_class=tax,
+            category=category,
+            description=description,
+            expected_amount=expected,
+            actual_amount=actual,
+            vendor=vendor,
+            status=status,
+        )
