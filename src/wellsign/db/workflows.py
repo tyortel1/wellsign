@@ -172,11 +172,11 @@ def list_stages(workflow_id: str) -> list[StageRow]:
                 (sid,),
             ).fetchall()
             email_rows = conn.execute(
-                "SELECT set.id, set.email_template_id, set.item_order, set.wait_days, et.name "
-                "  FROM stage_email_templates set "
-                "  JOIN email_templates et ON et.id = set.email_template_id "
-                " WHERE set.stage_id = ? "
-                " ORDER BY set.item_order",
+                "SELECT s.id, s.email_template_id, s.item_order, s.wait_days, et.name "
+                "  FROM stage_email_templates s "
+                "  JOIN email_templates et ON et.id = s.email_template_id "
+                " WHERE s.stage_id = ? "
+                " ORDER BY s.item_order",
                 (sid,),
             ).fetchall()
             stages.append(

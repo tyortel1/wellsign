@@ -72,9 +72,19 @@ class NewProjectDialog(QDialog):
         self.well_edit = QLineEdit()
         self.well_edit.setPlaceholderText("e.g. Pargmann-Gisler #1")
 
+        self.workflow_combo = QComboBox()
+        self._workflows = list_workflows()
+        if not self._workflows:
+            self.workflow_combo.addItem("(no workflows defined)", userData=None)
+            self.workflow_combo.setEnabled(False)
+        else:
+            for wf in self._workflows:
+                self.workflow_combo.addItem(wf.name, userData=wf.id)
+
         form.addRow("Project name:", self.name_edit)
         form.addRow("Region:", self.region_edit)
         form.addRow("Well name:", self.well_edit)
+        form.addRow("Use workflow:", self.workflow_combo)
 
         # License file row
         license_row = QHBoxLayout()
@@ -162,6 +172,7 @@ class NewProjectDialog(QDialog):
         if self._verified_license is None:
             return
         payload = self._verified_license
+        workflow_id = self.workflow_combo.currentData()
         self._created = insert_project(
             name=self.name_edit.text().strip(),
             region=self.region_edit.text().strip(),
@@ -171,6 +182,7 @@ class NewProjectDialog(QDialog):
             license_issued_at=payload.issued_at.isoformat(),
             license_expires_at=payload.expires_at.isoformat(),
             license_key_id=payload.key_id,
+            workflow_id=workflow_id,
             is_test=False,
         )
         self.accept()

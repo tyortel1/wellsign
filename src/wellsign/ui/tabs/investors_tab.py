@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QBrush, QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
@@ -15,12 +16,24 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from wellsign.db.investors import list_investors
+from wellsign.db.investors import get_investor, list_investors
 from wellsign.db.projects import ProjectRow
+from wellsign.db.workflows import TrafficLight, compute_traffic_light
+from wellsign.ui.dialogs.investor_dialog import InvestorDialog
+
+_INVESTOR_ID_ROLE = Qt.ItemDataRole.UserRole + 1
 
 _HEADERS = [
-    "Name", "Entity", "Email", "City, State", "WI %", "LLG (Decker)", "DHC (Paloma)", "Status"
+    "", "Name", "Entity", "Email", "City, State", "WI %",
+    "LLG (Decker)", "DHC (Paloma)", "Stage",
 ]
+
+_LIGHT_COLORS = {
+    TrafficLight.GREEN:  QColor("#1a7f37"),
+    TrafficLight.YELLOW: QColor("#d97706"),
+    TrafficLight.RED:    QColor("#d1242f"),
+    TrafficLight.GREY:   QColor("#aab1bd"),
+}
 
 
 class InvestorsTab(QWidget):
@@ -46,6 +59,7 @@ class InvestorsTab(QWidget):
         self.import_btn = QPushButton("Import from Excel…")
         self.import_btn.setProperty("secondary", True)
         self.add_btn = QPushButton("+ Add Investor")
+        self.add_btn.clicked.connect(self._on_add)
         header.addWidget(self.import_btn)
         header.addWidget(self.add_btn)
 
@@ -60,13 +74,15 @@ class InvestorsTab(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(6, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(8, QHeaderView.ResizeMode.Stretch)
+        self.table.doubleClicked.connect(self._on_double_clicked)
 
         outer.addLayout(header)
         outer.addWidget(self.summary_label)
@@ -97,6 +113,20 @@ class InvestorsTab(QWidget):
 
         self.table.setRowCount(len(rows))
         for r, inv in enumerate(rows):
+            traffic = compute_traffic_light(inv.id)
+            light_color = _LIGHT_COLORS[traffic.light]
+
+            light_item = QTableWidgetItem("●")
+            light_item.setForeground(QBrush(light_color))
+            light_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            light_item.setToolTip(traffic.label)
+            font = light_item.font()
+            font.setPointSize(16)
+            font.setBold(True)
+            light_item.setFont(font)
+            light_item.setData(_INVESTOR_ID_ROLE, inv.id)
+            self.table.setItem(r, 0, light_item)
+
             cells = [
                 inv.display_name,
                 inv.entity_name or "—",
@@ -105,10 +135,36 @@ class InvestorsTab(QWidget):
                 f"{inv.wi_percent * 100:.6f}%",
                 f"${(inv.llg_amount or 0):,.2f}",
                 f"${(inv.dhc_amount or 0):,.2f}",
-                inv.portal_status.replace("_", " ").title(),
+                traffic.label,
             ]
-            for col, text in enumerate(cells):
+            for offset, text in enumerate(cells):
+                col = offset + 1
                 item = QTableWidgetItem(text)
-                if col >= 4 and col <= 6:
+                if col in (5, 6, 7):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self.table.setItem(r, col, item)
+
+    # ---- handlers --------------------------------------------------------
+    def _on_add(self) -> None:
+        if self._project is None:
+            return
+        dlg = InvestorDialog(self._project, parent=self)
+        if dlg.exec() and dlg.saved_investor is not None:
+            self.refresh()
+
+    def _on_double_clicked(self, index) -> None:
+        if self._project is None or not index.isValid():
+            return
+        row = index.row()
+        light_item = self.table.item(row, 0)
+        if light_item is None:
+            return
+        investor_id = light_item.data(_INVESTOR_ID_ROLE)
+        if not investor_id:
+            return
+        existing = get_investor(investor_id)
+        if existing is None:
+            return
+        dlg = InvestorDialog(self._project, parent=self, existing=existing)
+        if dlg.exec() and dlg.saved_investor is not None:
+            self.refresh()

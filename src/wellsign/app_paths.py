@@ -64,3 +64,10 @@ def global_templates_dir() -> Path:
     p = app_data_root() / "templates" / "documents"
     p.mkdir(parents=True, exist_ok=True)
     return p
+
+
+def cost_attachments_dir(project_uuid: str, cost_line_item_id: str) -> Path:
+    """Where receipts for a single cost line item live."""
+    p = project_dir(project_uuid) / "costs" / cost_line_item_id
+    p.mkdir(parents=True, exist_ok=True)
+    return p

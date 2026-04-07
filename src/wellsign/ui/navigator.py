@@ -22,8 +22,8 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush
 from PySide6.QtWidgets import QHeaderView, QTreeWidget, QTreeWidgetItem, QWidget
 
+from wellsign.db.phases import info_for as phase_info_for
 from wellsign.db.projects import ProjectRow, list_projects
-from wellsign.db.stages import compute_stage
 
 
 class NavKind(str, Enum):
@@ -80,13 +80,13 @@ class NavigatorTree(QTreeWidget):
             return
         self._projects_root.takeChildren()
         for proj in list_projects():
-            stage = compute_stage(proj.id)
+            phase = phase_info_for(proj.phase)
             label = f"●  {proj.name}"
             item = QTreeWidgetItem([label])
             item.setData(0, _ROLE_KIND, NavKind.PROJECT.value)
             item.setData(0, _ROLE_PROJECT_ID, proj.id)
-            item.setForeground(0, QBrush(stage.color))
-            item.setToolTip(0, f"{proj.name}\nStage: {stage.label}")
+            item.setForeground(0, QBrush(phase.color))
+            item.setToolTip(0, f"{proj.name}\nPhase: {phase.label}")
             self._projects_root.addChild(item)
             if select_id and proj.id == select_id:
                 self.setCurrentItem(item)

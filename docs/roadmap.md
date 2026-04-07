@@ -18,7 +18,7 @@
 - ✅ Multi-select TemplatePickerDialog for batch attaching docs/emails to stages
 - ✅ **Phases subsystem** (`db/phases.py`) — 7-state operator lifecycle with phase banner, Advance/Set Phase buttons, color-coded navigator dots
 - ✅ **AFE Costs subsystem** (`db/costs.py` + `CostsTab` + `CostLineDialog`) — line items with vendor/status, receipt attachments, variance coloring, totals row
-- ✅ Default "Standard Paloma Closing" workflow seeded with 4 stages and all the right docs/emails attached
+- ✅ Default "Standard Capital Raise" workflow seeded with 3 stages (Outreach → Subscription → Cash Call) and all the right docs/emails attached. Renamed from the original "Standard Paloma Closing" 4-stage version on 2026-04-07 — Drilling was dropped because it's a project phase, not a per-investor workflow stage. Phases were also renamed from plain English ("Getting Investors") to industry terms ("Outreach", "Subscription", "Cash Call") — phase enum codes stayed the same so no schema migration was needed.
 - ✅ Real ProjectSetupTab (read-only summary) with traffic-light counts in the phase banner
 - ✅ Real InvestorsTab (table view) with traffic lights + WI sum validation
 - ✅ Demo data with 5 investors at varying stage timing for traffic light demo + 10 realistic AFE cost lines

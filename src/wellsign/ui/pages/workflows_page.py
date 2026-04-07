@@ -32,10 +32,12 @@ from wellsign.db.workflows import (
     attach_doc_to_stage,
     attach_email_to_stage,
     delete_stage,
+    delete_workflow,
     detach_doc_from_stage,
     detach_email_from_stage,
     get_workflow,
     insert_stage,
+    insert_workflow,
     list_stages,
     list_workflows,
     reorder_stages,
@@ -232,6 +234,9 @@ class StageCard(QFrame):
 # WorkflowsPage — main page widget
 # ===========================================================================
 class WorkflowsPage(QWidget):
+    workflowCreated = Signal(str)  # workflow_id
+    workflowDeleted = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._workflow: WorkflowRow | None = None
@@ -253,9 +258,18 @@ class WorkflowsPage(QWidget):
         header.addWidget(self.title_label)
         header.addStretch(1)
 
+        self.new_workflow_btn = QPushButton("+ New Workflow")
+        self.new_workflow_btn.clicked.connect(self._on_new_workflow)
+        header.addWidget(self.new_workflow_btn)
+
         self.new_stage_btn = QPushButton("+ Add Stage")
         self.new_stage_btn.clicked.connect(self._on_add_stage)
         header.addWidget(self.new_stage_btn)
+
+        self.delete_workflow_btn = QPushButton("Delete Workflow")
+        self.delete_workflow_btn.setProperty("danger", True)
+        self.delete_workflow_btn.clicked.connect(self._on_delete_workflow)
+        header.addWidget(self.delete_workflow_btn)
 
         self.description_label = QLabel("")
         self.description_label.setStyleSheet("color: #5b6473;")
@@ -294,18 +308,58 @@ class WorkflowsPage(QWidget):
     def _refresh(self) -> None:
         if self._workflow is None:
             self.title_label.setText("Workflows")
-            self.description_label.setText("No workflow selected.")
+            self.description_label.setText(
+                "No workflow selected. Click + New Workflow to create one."
+            )
             self.stages_list.clear()
             self.new_stage_btn.setEnabled(False)
+            self.delete_workflow_btn.setEnabled(False)
             return
 
         self.title_label.setText(self._workflow.name)
         self.description_label.setText(self._workflow.description or "")
         self.new_stage_btn.setEnabled(True)
+        self.delete_workflow_btn.setEnabled(True)
 
         self.stages_list.clear()
         for stage in list_stages(self._workflow.id):
             self._append_stage(stage)
+
+    def _on_new_workflow(self) -> None:
+        name, ok = QInputDialog.getText(
+            self, "New workflow", "Workflow name:", text="My new workflow"
+        )
+        if not ok or not name.strip():
+            return
+        description, ok2 = QInputDialog.getText(
+            self,
+            "Description",
+            "Optional one-line description:",
+            text="",
+        )
+        if not ok2:
+            description = ""
+        new_wf = insert_workflow(name=name.strip(), description=description.strip())
+        self.show_workflow(new_wf.id)
+        self.workflowCreated.emit(new_wf.id)
+
+    def _on_delete_workflow(self) -> None:
+        if self._workflow is None:
+            return
+        ans = QMessageBox.question(
+            self,
+            "Delete workflow",
+            f"Delete workflow '{self._workflow.name}' and all of its stages? "
+            f"This cannot be undone.",
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        delete_workflow(self._workflow.id)
+        self._workflow = None
+        self._load_first_workflow()
+        if self._workflow is None:
+            self._refresh()
+        self.workflowDeleted.emit()
 
     def _append_stage(self, stage: StageRow) -> None:
         item = QListWidgetItem()

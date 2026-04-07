@@ -46,6 +46,12 @@ CREATE TABLE IF NOT EXISTS projects (
     -- Workflow assignment (which workflow this project runs against)
     workflow_id         TEXT,                              -- nullable for legacy / unassigned
 
+    -- High-level project lifecycle phase (preset enum)
+    -- investigating | soliciting | documenting | funding | drilling
+    -- | abandoned    | completing
+    phase               TEXT NOT NULL DEFAULT 'investigating',
+    phase_entered_at    TEXT,
+
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -305,3 +311,38 @@ CREATE TABLE IF NOT EXISTS investor_stage_runs (
 CREATE INDEX IF NOT EXISTS idx_isr_investor ON investor_stage_runs(investor_id);
 CREATE INDEX IF NOT EXISTS idx_isr_project  ON investor_stage_runs(project_id);
 CREATE INDEX IF NOT EXISTS idx_isr_status   ON investor_stage_runs(status);
+
+-- ---------------------------------------------------------------------------
+-- Cost line items — AFE budget vs actuals per project
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cost_line_items (
+    id              TEXT PRIMARY KEY,
+    project_id      TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    phase_group     TEXT NOT NULL DEFAULT 'drilling',      -- pre_drilling | drilling | completion | facilities | soft
+    tax_class       TEXT NOT NULL DEFAULT 'intangible',    -- intangible (IDC) | tangible (TDC) | mixed
+    category        TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    expected_amount REAL NOT NULL DEFAULT 0,
+    actual_amount   REAL,                                  -- null until something paid
+    vendor          TEXT,
+    invoice_number  TEXT,
+    paid_at         TEXT,
+    notes           TEXT,
+    status          TEXT NOT NULL DEFAULT 'planned',       -- planned | committed | invoiced | paid
+    item_order      INTEGER NOT NULL DEFAULT 0,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cost_lines_project ON cost_line_items(project_id);
+
+CREATE TABLE IF NOT EXISTS cost_attachments (
+    id                  TEXT PRIMARY KEY,
+    cost_line_item_id   TEXT NOT NULL REFERENCES cost_line_items(id) ON DELETE CASCADE,
+    file_name           TEXT NOT NULL,
+    storage_path        TEXT NOT NULL,
+    file_sha256         TEXT,
+    byte_size           INTEGER,
+    mime_type           TEXT,
+    uploaded_at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cost_attachments_line ON cost_attachments(cost_line_item_id);

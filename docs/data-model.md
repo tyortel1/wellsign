@@ -145,7 +145,7 @@ Snapshot of which templates are wired into a specific project, with a per-projec
 | is_global | INTEGER | |
 | created_at, updated_at | TEXT | |
 
-The seed creates **9 templates** spread across the 3 active phases — Solicitation × 3 (Initial Pitch / Follow-up / Final Ask), Documentation × 3 (Send Packet / Reminder / Final Reminder), Funding × 3 (Wire Instructions / Reminder / Thank You). See `db/seed.py:_seed_email_templates()`.
+The seed creates **9 templates** spread across the 3 active phases — Outreach × 3 (Initial Pitch / Follow-up / Final Ask), Subscription × 3 (Send Packet / Reminder / Final Reminder), Cash Call × 3 (Wire Instructions / Reminder / Thank You). See `db/seed.py:_seed_email_templates()`.
 
 Merge variables used by the seeded templates:
 `{{prospect_name}}`, `{{well_name}}`, `{{county_state}}`, `{{investor_first_name}}`, `{{investor_name}}`, `{{investor_wi_percent_display}}`, `{{llg_amount}}`, `{{dhc_amount}}`, `{{total_raise}}`, `{{total_owed}}`, `{{close_deadline}}`, `{{operator_name}}`, `{{outstanding_items}}`.
@@ -233,7 +233,7 @@ These five tables make up the per-investor workflow automation. See `db/workflow
 | Column | Type | Notes |
 |---|---|---|
 | id | TEXT PK | |
-| name | TEXT NOT NULL | "Standard Paloma Closing" |
+| name | TEXT NOT NULL | "Standard Capital Raise" (the seeded default) |
 | description | TEXT | |
 | is_global | INTEGER | 1 = available to all projects |
 | created_at, updated_at | TEXT | |
@@ -247,7 +247,7 @@ Ordered children of a workflow. Each stage has an SLA and an exit condition.
 | id | TEXT PK | |
 | workflow_id | TEXT FK | `→ workflows(id) ON DELETE CASCADE` |
 | stage_order | INTEGER NOT NULL | 0-indexed; reorderable via drag-drop in `WorkflowsPage` |
-| name | TEXT NOT NULL | "Solicitation" / "Documentation" / "Funding" / "Drilling" |
+| name | TEXT NOT NULL | "Outreach" / "Subscription" / "Cash Call" (Drilling is a project phase, not a workflow stage) |
 | description | TEXT | |
 | duration_days | INTEGER | SLA — drives traffic-light yellow/red |
 | exit_condition | TEXT NOT NULL | default `'manual'`. Other values: `investor_committed` / `all_docs_signed` / `llg_paid` / `dhc_paid` / `llg_and_dhc_paid` |
@@ -385,7 +385,7 @@ Listed here so they're discoverable from the data-model doc — also tracked in 
 
 1. **Migration runner is dumb.** `schema.sql` uses `CREATE TABLE IF NOT EXISTS` so new columns added to existing tables (`projects.workflow_id`, `phase`, `phase_entered_at`) are NOT applied to returning installs. `insert_project()` writes `workflow_id` directly and would crash on a stale DB. Fix: add `ALTER TABLE` blocks inside try/except, or move to a versioned migrations folder. Bump `db/migrate.py:CURRENT_VERSION` when this changes.
 2. **Real `insert_investor()` doesn't create an `investor_stage_runs` row.** Only the demo seed does. Until this is wired, traffic lights only work for the demo project.
-3. **Exit conditions aren't enforced.** No code checks `exit_condition` and advances an investor's stage run when the condition is met (e.g., when all docs are signed, the Documentation stage should auto-complete).
+3. **Exit conditions aren't enforced.** No code checks `exit_condition` and advances an investor's stage run when the condition is met (e.g., when all docs are signed, the Subscription stage should auto-complete).
 4. **Reminder scheduler missing.** `stage_email_templates.wait_days` is captured but no background loop fires reminders when `entered_at + wait_days < now()`.
 5. **Audit log writes missing.** Schema + triggers exist but no code calls into the table.
 6. **Send events not written.** `send_events` table exists but Outlook send isn't built yet.

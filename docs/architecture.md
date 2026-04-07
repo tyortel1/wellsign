@@ -44,7 +44,7 @@ WellSign has three orthogonal concept layers the operator interacts with:
 | **Workflows + Stages** | Per investor inside a project | Time + exit conditions (auto-advance is TODO) | `db/workflows.py` + 5 workflow tables + `WorkflowsPage` + traffic-light system |
 | **Costs (AFE)** | Per project | Operator entries during Drilling phase | `db/costs.py` + `cost_line_items` / `cost_attachments` tables + `CostsTab` + `CostLineDialog` |
 
-**Phases** are the operator's mental model — "where is this deal at right now?" 7 preset states (Investigating → Soliciting → Documenting → Funding → Drilling → Abandoned/Completing). Manually advanced via an "Advance →" button on the project's phase banner.
+**Phases** are the operator's mental model — "where is this deal at right now?" 7 preset states (Prospect Generation → Outreach → Subscription → Cash Call → Drilling → P&A / Completion). Manually advanced via an "Advance →" button on the project's phase banner.
 
 **Workflows** sit one level down — they automate the per-investor side of the active phase. A workflow has ordered stages, each stage attaches docs and emails (with `wait_days` for follow-ups) and an exit condition. Investors are tracked individually through `investor_stage_runs` with SLA timing → traffic-light status (🟢🟡🔴⚪).
 
@@ -123,7 +123,7 @@ wellsign.spec                       # PyInstaller config
 |     ● Proj A |   Pargmann-Gisler #1  ·  Karnes County, TX           |
 |     ● Proj B |                                                      |
 |              |   ┌─ Phase banner ──────────────────────────────┐    |
-| ▼ Templates  |   │ ●  Getting Signatures           [Advance →] │    |
+| ▼ Templates  |   │ ●  Subscription                 [Advance →] │    |
 |     Document |   │    Sending packets and collecting signed... │    |
 |     Email    |   └─────────────────────────────────────────────┘    |
 |              |                                                      |
@@ -148,7 +148,7 @@ wellsign.spec                       # PyInstaller config
     Document templates
     Email templates
 ▼ Workflows               ← workflows are top-level navigable
-    ⚡ Standard Paloma Closing
+    ⚡ Standard Capital Raise
 ```
 
 ### ProjectWorkspace — phase banner + 7 tabs
@@ -192,7 +192,7 @@ In the Investors tab and the Project Setup banner, each investor shows a traffic
 1. Operator clicks `+ New Project` (Ctrl+N) → `NewProjectDialog`
 2. Operator pastes a `.wslicense` file path → `verify_license_file()` parses, verifies RSA-PSS, returns `LicensePayload`
 3. SHA-256 of canonical payload → `license_key_hash`
-4. Operator picks a workflow from the combo (default: "Standard Paloma Closing")
+4. Operator picks a workflow from the combo (default: "Standard Capital Raise")
 5. `db/projects.py:insert_project()` writes the row with `workflow_id` set
 6. `app_paths.project_dir(uuid)` creates the on-disk folder
 7. Navigator + dashboard refresh
@@ -273,7 +273,7 @@ Per [roadmap.md](roadmap.md):
 
 ## Open architectural questions
 
-- **Phase ↔ workflow stage coupling:** `exit_condition` on a workflow stage doesn't auto-advance the project phase. Should it? (e.g., when stage 2 Documentation exits with `all_docs_signed`, auto-advance project from `documenting` → `funding`.) Probably yes — that's the whole point.
+- **Phase ↔ workflow stage coupling:** `exit_condition` on a workflow stage doesn't auto-advance the project phase. Should it? (e.g., when the Subscription stage exits with `all_docs_signed`, auto-advance project phase from `documenting` → `funding`.) Probably yes — that's the whole point. Note that the phase enum **codes** stayed the same (`investigating` / `soliciting` / `documenting` / `funding` / `drilling` / `abandoned` / `completing`) when labels were renamed on 2026-04-07; only the user-facing strings changed.
 - **Migration runner:** `db/migrate.py` is dumb — single idempotent script with `CREATE TABLE IF NOT EXISTS`. Adding new columns to existing tables doesn't apply on returning installs. **This will bite when an existing install upgrades.** Either add `ALTER TABLE` patterns inside try/except, or move to a versioned migrations folder.
 - **Investor stage runs at real project creation:** the demo seed creates them, but real `insert_investor()` doesn't kick off a stage run. Needs wiring before traffic lights work outside the demo.
 - **Reminder scheduler:** `wait_days` on `stage_email_templates` is captured but no background loop fires the reminders. Whole point of the workflow engine.

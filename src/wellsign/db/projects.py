@@ -28,6 +28,8 @@ class ProjectRow:
     is_test: bool
     created_at: str
     workflow_id: str | None = None
+    phase: str = "investigating"
+    phase_entered_at: str | None = None
 
     @property
     def display_label(self) -> str:
@@ -38,11 +40,13 @@ class ProjectRow:
 
 
 def _row_to_project(row: sqlite3.Row) -> ProjectRow:
-    # workflow_id may be missing on legacy rows; tolerate it.
-    try:
-        wf = row["workflow_id"]
-    except (KeyError, IndexError):
-        wf = None
+    # workflow_id / phase may be missing on legacy rows; tolerate it.
+    def _safe(key: str, default=None):
+        try:
+            return row[key]
+        except (KeyError, IndexError):
+            return default
+
     return ProjectRow(
         id=row["id"],
         name=row["name"],
@@ -55,7 +59,9 @@ def _row_to_project(row: sqlite3.Row) -> ProjectRow:
         status=row["status"],
         is_test=bool(row["is_test"]),
         created_at=row["created_at"],
-        workflow_id=wf,
+        workflow_id=_safe("workflow_id"),
+        phase=_safe("phase", "investigating") or "investigating",
+        phase_entered_at=_safe("phase_entered_at"),
     )
 
 
@@ -135,3 +141,27 @@ def insert_project(
     project = get_project(new_id)
     assert project is not None
     return project
+
+
+def get_project_totals(project_id: str) -> tuple[float, float]:
+    """Return ``(total_llg_cost, total_dhc_cost)`` for a project, defaulting to 0."""
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT total_llg_cost, total_dhc_cost FROM projects WHERE id = ?",
+            (project_id,),
+        ).fetchone()
+    if row is None:
+        return 0.0, 0.0
+    return float(row["total_llg_cost"] or 0), float(row["total_dhc_cost"] or 0)
+
+
+def set_phase(project_id: str, new_phase: str) -> None:
+    """Move a project to a new phase, stamping phase_entered_at."""
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    with connect() as conn:
+        conn.execute(
+            "UPDATE projects SET phase = ?, phase_entered_at = ?, updated_at = ? "
+            " WHERE id = ?",
+            (new_phase, now, now, project_id),
+        )
+        conn.commit()

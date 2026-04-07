@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+from wellsign.db.costs import insert_cost_line
 from wellsign.db.investors import insert_investor
 from wellsign.db.migrate import connect
 from wellsign.db.projects import count_projects, insert_project
@@ -93,7 +94,7 @@ def _seed_doc_templates() -> None:
 
 def _seed_email_templates() -> None:
     insert_email_template(
-        name="Solicitation — Initial Pitch",
+        name="Outreach — Initial Pitch",
         purpose="invitation",
         subject="Investment opportunity: {{prospect_name}} ({{well_name}})",
         body_html=(
@@ -106,7 +107,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Solicitation — Follow-up",
+        name="Outreach — Follow-up",
         purpose="invitation",
         subject="Following up — {{prospect_name}}",
         body_html=(
@@ -117,7 +118,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Solicitation — Final Ask",
+        name="Outreach — Final Ask",
         purpose="invitation",
         subject="Last call — {{prospect_name}} closes soon",
         body_html=(
@@ -129,7 +130,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Documentation — Send Packet",
+        name="Subscription — Send Packet",
         purpose="invitation",
         subject="{{prospect_name}} — Investor Documents for {{investor_name}}",
         body_html=(
@@ -146,7 +147,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Documentation — Reminder",
+        name="Subscription — Reminder",
         purpose="reminder",
         subject="REMINDER: {{prospect_name}} signatures still outstanding",
         body_html=(
@@ -159,7 +160,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Documentation — Final Reminder",
+        name="Subscription — Final Reminder",
         purpose="reminder",
         subject="URGENT: {{prospect_name}} — please return signatures",
         body_html=(
@@ -171,7 +172,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Funding — Wire Instructions",
+        name="Cash Call — Wire Instructions",
         purpose="invitation",
         subject="{{prospect_name}} — Wire instructions for cash call",
         body_html=(
@@ -186,7 +187,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Funding — Reminder",
+        name="Cash Call — Reminder",
         purpose="reminder",
         subject="REMINDER: {{prospect_name}} cash call outstanding",
         body_html=(
@@ -197,7 +198,7 @@ def _seed_email_templates() -> None:
         ),
     )
     insert_email_template(
-        name="Funding — Thank You",
+        name="Cash Call — Thank You",
         purpose="thank_you",
         subject="Received — thank you ({{prospect_name}})",
         body_html=(
@@ -215,74 +216,69 @@ def _seed_email_templates() -> None:
 # ---------------------------------------------------------------------------
 def _seed_default_workflow() -> None:
     workflow = insert_workflow(
-        name="Standard Paloma Closing",
-        description="Default 4-stage workflow used for typical Paloma well prospects.",
+        name="Standard Capital Raise",
+        description="Default 3-stage capital raise pipeline: Outreach → Subscription → Cash Call.",
     )
 
     docs_by_type = {t.doc_type: t.id for t in list_doc_templates()}
     emails_by_name = {t.name: t.id for t in list_email_templates()}
 
-    # Stage 1: Solicitation
+    # Stage 1: Outreach (pre-subscription marketing to existing relationships)
     s1 = insert_stage(
         workflow_id=workflow.id,
-        name="Solicitation",
+        name="Outreach",
         duration_days=21,
         exit_condition=ExitCondition.INVESTOR_COMMITTED.value,
-        description="Pitch the deal and collect verbal commitments.",
+        description="Pitch the deal to existing relationships and collect verbal commitments.",
     )
     if "other" in docs_by_type:
         attach_doc_to_stage(s1.id, docs_by_type["other"])  # Subscription Agreement
     for name, wait in [
-        ("Solicitation — Initial Pitch", 0),
-        ("Solicitation — Follow-up", 7),
-        ("Solicitation — Final Ask", 14),
+        ("Outreach — Initial Pitch", 0),
+        ("Outreach — Follow-up", 7),
+        ("Outreach — Final Ask", 14),
     ]:
         if name in emails_by_name:
             attach_email_to_stage(s1.id, emails_by_name[name], wait_days=wait)
 
-    # Stage 2: Documentation
+    # Stage 2: Subscription (full investor packet — PA, JOA, C-1, C-2, W-9, Info Form)
     s2 = insert_stage(
         workflow_id=workflow.id,
-        name="Documentation",
+        name="Subscription",
         duration_days=14,
         exit_condition=ExitCondition.ALL_DOCS_SIGNED.value,
-        description="Send packets, collect signatures.",
+        description="Send the full subscription packet and collect signed returns.",
     )
     for code in ("joa", "pa", "cash_call_c1", "cash_call_c2", "info_sheet"):
         if code in docs_by_type:
             attach_doc_to_stage(s2.id, docs_by_type[code])
     for name, wait in [
-        ("Documentation — Send Packet", 0),
-        ("Documentation — Reminder", 7),
-        ("Documentation — Final Reminder", 12),
+        ("Subscription — Send Packet", 0),
+        ("Subscription — Reminder", 7),
+        ("Subscription — Final Reminder", 12),
     ]:
         if name in emails_by_name:
             attach_email_to_stage(s2.id, emails_by_name[name], wait_days=wait)
 
-    # Stage 3: Funding
+    # Stage 3: Cash Call (LLG to Decker, DHC to operator)
     s3 = insert_stage(
         workflow_id=workflow.id,
-        name="Funding",
+        name="Cash Call",
         duration_days=10,
         exit_condition=ExitCondition.LLG_AND_DHC_PAID.value,
-        description="Cash call collection from each investor.",
+        description="Cash call collection: LLG wires to Decker, DHC wires/checks to the operator.",
     )
     for name, wait in [
-        ("Funding — Wire Instructions", 0),
-        ("Funding — Reminder", 5),
-        ("Funding — Thank You", 0),
+        ("Cash Call — Wire Instructions", 0),
+        ("Cash Call — Reminder", 5),
+        ("Cash Call — Thank You", 0),
     ]:
         if name in emails_by_name:
             attach_email_to_stage(s3.id, emails_by_name[name], wait_days=wait)
 
-    # Stage 4: Drilling (manual exit — operator marks complete after spud / completion)
-    insert_stage(
-        workflow_id=workflow.id,
-        name="Drilling",
-        duration_days=90,
-        exit_condition=ExitCondition.MANUAL.value,
-        description="Well is being drilled. Track AFE actuals and reconcile.",
-    )
+    # NOTE: Drilling is a project PHASE, not a per-investor workflow stage.
+    # Once all investors complete the Cash Call stage, the project's `phase`
+    # advances to 'drilling' — operator-side activity, no per-investor signaling.
 
 
 # ---------------------------------------------------------------------------
@@ -321,13 +317,16 @@ def _seed_demo_project_with_runs() -> None:
                    state = 'TX',
                    agreement_date = ?,
                    close_deadline = ?,
-                   workflow_id = ?
+                   workflow_id = ?,
+                   phase = 'documenting',
+                   phase_entered_at = ?
              WHERE id = ?
             """,
             (
                 (now - timedelta(days=14)).date().isoformat(),
                 (now + timedelta(days=21)).date().isoformat(),
                 workflow.id if workflow else None,
+                (now - timedelta(days=10)).isoformat(timespec="seconds"),
                 project.id,
             ),
         )
@@ -345,7 +344,7 @@ def _seed_demo_project_with_runs() -> None:
     LLG = 1500000.00
     DHC = 2750000.00
 
-    # Stage to put investors into for the demo: Stage 2 (Documentation)
+    # Stage to put investors into for the demo: Stage 2 (Subscription)
     doc_stage = stages[1] if len(stages) >= 2 else None
 
     for last, first, entity, email, city, state, wi, days_offset in demo_investors:
@@ -369,3 +368,57 @@ def _seed_demo_project_with_runs() -> None:
                 stage_id=doc_stage.id,
                 entered_at=datetime.utcnow() - timedelta(days=days_offset),
             )
+
+    # Realistic ~$8M Eagle Ford horizontal AFE — 32 line items grouped by phase
+    # (phase, tax, category, description, expected, actual, vendor, status)
+    demo_costs = [
+        # ---- Pre-drilling ----
+        ("pre_drilling", "intangible", "Lease Bonus",          "Lease bonus payments — 320 acres @ ~$625/ac", 200000.00,  200000.00, "Various mineral owners",   "paid"),
+        ("pre_drilling", "intangible", "Title Work",           "Title opinions and curative",                  25000.00,   24750.00, "Brennan Title Co.",        "paid"),
+        ("pre_drilling", "intangible", "Permits / Regulatory", "RRC application + bonding + APD",              40000.00,   42000.00, "Texas RRC",                "paid"),
+        ("pre_drilling", "intangible", "Surveying",            "Pre-spud + post-spud surveys",                 25000.00,   23500.00, "Twin Lakes Surveying",     "paid"),
+        ("pre_drilling", "intangible", "Site Prep",            "Pad construction + grading",                  200000.00,  192300.00, "Karnes Earthworks LLC",    "paid"),
+        ("pre_drilling", "intangible", "Roads / Location",     "Access road build + culverts",                 80000.00,   84600.00, "Karnes Earthworks LLC",    "paid"),
+        # ---- Drilling ----
+        ("drilling",     "intangible", "Drilling",             "Rig day rate × ~21 days — Pargmann-Gisler #1", 1500000.00, 1488750.00, "Patterson-UTI Rig 174",    "paid"),
+        ("drilling",     "intangible", "Drill Bits / BHA",     "PDC bits + bottomhole assembly",              150000.00,  142800.00, "NOV ReedHycalog",          "paid"),
+        ("drilling",     "intangible", "Directional Drilling", "Geosteering + MWD/LWD services",              400000.00,  411500.00, "Halliburton Sperry",       "paid"),
+        ("drilling",     "intangible", "Mud / Fluids",         "Drilling fluids program (3 sections)",        250000.00,  248900.00, "M-I SWACO",                "invoiced"),
+        ("drilling",     "intangible", "Logging",              "Open-hole + mud logging suite",               150000.00,  148200.00, "Schlumberger",             "paid"),
+        ("drilling",     "tangible",   "Surface Casing",       "13-3/8 in surface string",                     80000.00,   79400.00, "Tenaris USA",              "paid"),
+        ("drilling",     "tangible",   "Intermediate Casing",  "9-5/8 in intermediate string",                200000.00,  198650.00, "Tenaris USA",              "paid"),
+        ("drilling",     "tangible",   "Production Casing",    "5-1/2 in production string",                  300000.00,  295100.00, "Tenaris USA",              "paid"),
+        ("drilling",     "intangible", "Cement",               "Cementing services — all 3 strings",          180000.00,  174800.00, "Halliburton",              "paid"),
+        ("drilling",     "intangible", "Mob / Demob",          "Rig mobilization + demobilization",            80000.00,   82500.00, "Patterson-UTI",            "paid"),
+        ("drilling",     "intangible", "Trucking",             "Equipment + materials hauling",                70000.00,   71200.00, "South Texas Hot Shot",     "invoiced"),
+        # ---- Completion ----
+        ("completion",   "intangible", "Frac Services",        "22-stage hydraulic fracturing — labor",      1500000.00,       None, "Liberty Energy",           "committed"),
+        ("completion",   "tangible",   "Proppant / Sand",      "Northern white + 100 mesh sand",              800000.00,       None, "US Silica",                "committed"),
+        ("completion",   "intangible", "Frac Fluids",          "Slickwater + chemical additives",             400000.00,       None, "ChampionX",                "committed"),
+        ("completion",   "intangible", "Perforating",          "22-stage perforation guns",                   120000.00,       None, "GR Energy Services",       "planned"),
+        ("completion",   "intangible", "Wireline",             "Plug + perf + dipole sonic",                  100000.00,       None, "Halliburton",              "planned"),
+        ("completion",   "intangible", "Coiled Tubing",        "Cleanout + flowback prep",                     60000.00,       None, "STEP Energy Services",     "planned"),
+        # ---- Facilities ----
+        ("facilities",   "tangible",   "Wellhead",             "Wellhead + christmas tree",                    80000.00,       None, "Cactus Wellhead",          "planned"),
+        ("facilities",   "tangible",   "Tank Battery",         "3 × 400 bbl tanks + manifold",                120000.00,       None, "Permian Tank",             "planned"),
+        ("facilities",   "tangible",   "Separator",            "3-phase separator + heater treater",           60000.00,       None, "Sivalls Inc.",             "planned"),
+        ("facilities",   "tangible",   "Flowlines",            "Wellhead → battery flowlines",                 80000.00,       None, "Stallion Oilfield",        "planned"),
+        ("facilities",   "tangible",   "Pipeline / Gathering", "Gathering line + tap fee",                    200000.00,       None, "Enterprise Crude",         "planned"),
+        ("facilities",   "tangible",   "Meter / SCADA",        "Custody-transfer meter + SCADA",               30000.00,       None, "Quorum Software",          "planned"),
+        # ---- Soft costs ----
+        ("soft",         "intangible", "Operator Overhead",    "Operator overhead @ 5% of project",           400000.00,       None, "Paloma Operating LLC",     "planned"),
+        ("soft",         "mixed",      "Contingency",          "10% contingency reserve",                     720000.00,       None, "—",                        "planned"),
+        ("soft",         "intangible", "Insurance",            "Well control + general liability",             40000.00,   40000.00, "Marsh McLennan",           "paid"),
+    ]
+    for phase, tax, category, description, expected, actual, vendor, status in demo_costs:
+        insert_cost_line(
+            project_id=project.id,
+            phase_group=phase,
+            tax_class=tax,
+            category=category,
+            description=description,
+            expected_amount=expected,
+            actual_amount=actual,
+            vendor=vendor,
+            status=status,
+        )

@@ -6,13 +6,21 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
+from wellsign.db.investors import list_investors
 from wellsign.db.projects import ProjectRow
+from wellsign.db.workflows import (
+    TrafficLight,
+    compute_traffic_light,
+    get_workflow,
+    list_stages,
+)
 
 
 class ProjectSetupTab(QWidget):
@@ -41,6 +49,29 @@ class ProjectSetupTab(QWidget):
         subtitle.setStyleSheet("color: #5b6473;")
         subtitle.setWordWrap(True)
         outer.addWidget(subtitle)
+
+        # Workflow / stage banner
+        self.stage_banner = QFrame()
+        self.stage_banner.setObjectName("StageBanner")
+        self.stage_banner.setStyleSheet(
+            "QFrame#StageBanner { background: #e2ecff; border: 1px solid #1f6feb; "
+            "border-radius: 8px; }"
+        )
+        banner_layout = QHBoxLayout(self.stage_banner)
+        banner_layout.setContentsMargins(18, 14, 18, 14)
+        banner_layout.setSpacing(12)
+        self.stage_label = QLabel("")
+        f2 = self.stage_label.font()
+        f2.setPointSize(11)
+        f2.setBold(True)
+        self.stage_label.setFont(f2)
+        self.stage_label.setStyleSheet("color: #14489f;")
+        self.stage_summary_label = QLabel("")
+        self.stage_summary_label.setStyleSheet("color: #1f2430;")
+        banner_layout.addWidget(self.stage_label)
+        banner_layout.addStretch(1)
+        banner_layout.addWidget(self.stage_summary_label)
+        outer.addWidget(self.stage_banner)
 
         card = QFrame()
         card.setObjectName("ProjectCard")
@@ -85,7 +116,12 @@ class ProjectSetupTab(QWidget):
         if project is None:
             for v in self._fields.values():
                 v.setText("—")
+            self.stage_label.setText("No project selected")
+            self.stage_summary_label.setText("")
+            self.stage_banner.setVisible(False)
             return
+
+        self._refresh_stage_banner(project)
 
         # Pull a few extra columns directly from the DB for nicer display.
         from wellsign.db.migrate import connect
@@ -112,3 +148,51 @@ class ProjectSetupTab(QWidget):
         self._fields["license_customer"].setText(project.license_customer or "—")
         self._fields["license_expires"].setText((project.license_expires_at or "—")[:10])
         self._fields["status"].setText((project.status or "").title())
+
+    def _refresh_stage_banner(self, project: ProjectRow) -> None:
+        if not project.workflow_id:
+            self.stage_label.setText("No workflow assigned")
+            self.stage_summary_label.setText("Pick a workflow at project creation.")
+            self.stage_banner.setVisible(True)
+            return
+
+        wf = get_workflow(project.workflow_id)
+        stages = list_stages(project.workflow_id) if wf else []
+        if not wf or not stages:
+            self.stage_label.setText("Workflow missing")
+            self.stage_summary_label.setText("")
+            self.stage_banner.setVisible(True)
+            return
+
+        # Compute the most-common active stage across this project's investors
+        # so the banner reflects "where the deal is at" overall.
+        investors = list_investors(project.id)
+        if not investors:
+            self.stage_label.setText(f"{wf.name} — Stage 1 of {len(stages)}: {stages[0].name}")
+            self.stage_summary_label.setText("No investors yet.")
+            self.stage_banner.setVisible(True)
+            return
+
+        stage_counts: dict[str, int] = {}
+        light_counts = {"green": 0, "yellow": 0, "red": 0, "grey": 0}
+        for inv in investors:
+            t = compute_traffic_light(inv.id)
+            light_counts[t.light.value] += 1
+            if t.stage:
+                stage_counts[t.stage.id] = stage_counts.get(t.stage.id, 0) + 1
+
+        if stage_counts:
+            top_stage_id = max(stage_counts, key=lambda k: stage_counts[k])
+            top_stage = next((s for s in stages if s.id == top_stage_id), stages[0])
+        else:
+            top_stage = stages[0]
+
+        self.stage_label.setText(
+            f"{wf.name}  ·  Stage {top_stage.stage_order + 1} of {len(stages)}: {top_stage.name}"
+        )
+        sla_text = f"  ·  {top_stage.duration_days}d SLA" if top_stage.duration_days else ""
+        self.stage_summary_label.setText(
+            f"🟢 {light_counts['green']}  🟡 {light_counts['yellow']}  "
+            f"🔴 {light_counts['red']}  ⚪ {light_counts['grey']}{sla_text}"
+        )
+        self.stage_banner.setVisible(True)

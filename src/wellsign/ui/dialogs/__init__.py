@@ -1,5 +1,7 @@
 """Modal dialogs (New Project, New Document Template, New Email Template, ...)."""
 
+from .cost_line_dialog import CostLineDialog
+from .investor_dialog import InvestorDialog
 from .new_doc_template_dialog import NewDocTemplateDialog
 from .new_email_template_dialog import NewEmailTemplateDialog
 from .new_project_dialog import NewProjectDialog
@@ -12,4 +14,6 @@ __all__ = [
     "TemplatePickerDialog",
     "TemplatePickerResult",
     "PickerMode",
+    "CostLineDialog",
+    "InvestorDialog",
 ]
