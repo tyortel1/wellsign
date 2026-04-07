@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
         self.navigator.selectionChangedTo.connect(self._on_nav_selection)
         self.dashboard_page.newProjectRequested.connect(self._open_new_project_dialog)
         self.project_workspace.phaseChanged.connect(self._on_phase_changed)
+        self.project_workspace.projectEdited.connect(self._on_project_edited)
         self.workflows_page.workflowCreated.connect(self._on_workflow_created)
         self.workflows_page.workflowDeleted.connect(self._on_workflow_deleted)
 
@@ -144,6 +145,13 @@ class MainWindow(QMainWindow):
         self.navigator.refresh_projects(select_id=project_id)
         self.dashboard_page.refresh()
         self.statusBar().showMessage("Phase updated.", 2500)
+
+    def _on_project_edited(self, project_id: str) -> None:
+        # Project name / well / region / customer / dates may have changed —
+        # refresh navigator labels and the dashboard table.
+        self.navigator.refresh_projects(select_id=project_id)
+        self.dashboard_page.refresh()
+        self.statusBar().showMessage("Project updated.", 2500)
 
     # ---- handlers -------------------------------------------------------
     def _on_nav_selection(self, sel: NavSelection) -> None:

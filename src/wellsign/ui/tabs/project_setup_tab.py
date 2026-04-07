@@ -1,13 +1,14 @@
-"""Project Setup tab — read-only summary of the active project (POC)."""
+"""Project Setup tab — read-only summary + Edit button + test-mode banner."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QPushButton,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -21,9 +22,12 @@ from wellsign.db.workflows import (
     get_workflow,
     list_stages,
 )
+from wellsign.ui.dialogs.edit_project_dialog import EditProjectDialog
 
 
 class ProjectSetupTab(QWidget):
+    projectEdited = Signal(str)  # emits project_id after a successful edit
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._project: ProjectRow | None = None
@@ -35,16 +39,50 @@ class ProjectSetupTab(QWidget):
         outer.setContentsMargins(28, 24, 28, 24)
         outer.setSpacing(16)
 
+        # Test-mode banner — visible only when projects.is_test == 1
+        self.test_banner = QFrame()
+        self.test_banner.setObjectName("TestModeBanner")
+        self.test_banner.setStyleSheet(
+            "QFrame#TestModeBanner { background: #fff3cd; border: 1px solid #f0c000; "
+            "border-radius: 6px; }"
+        )
+        tb_layout = QHBoxLayout(self.test_banner)
+        tb_layout.setContentsMargins(14, 10, 14, 10)
+        tb_layout.setSpacing(10)
+        tb_icon = QLabel("⚠")
+        tb_icon.setStyleSheet("color: #856404; font-size: 14pt; font-weight: bold;")
+        tb_text = QLabel(
+            "<b>TEST PROJECT</b> — this project is flagged as test data. Outlook "
+            "sends are saved to Drafts only and any costs/payments are mock."
+        )
+        tb_text.setStyleSheet("color: #856404;")
+        tb_text.setWordWrap(True)
+        tb_layout.addWidget(tb_icon)
+        tb_layout.addWidget(tb_text, 1)
+        self.test_banner.setVisible(False)
+        outer.addWidget(self.test_banner)
+
+        # Title row with Edit button
+        title_row = QHBoxLayout()
+        title_row.setSpacing(10)
         title = QLabel("Project Setup")
         f = title.font()
         f.setPointSize(18)
         f.setBold(True)
         title.setFont(f)
-        outer.addWidget(title)
+        title_row.addWidget(title)
+        title_row.addStretch(1)
+        self.edit_btn = QPushButton("Edit Project…")
+        self.edit_btn.setProperty("secondary", True)
+        self.edit_btn.setEnabled(False)
+        self.edit_btn.clicked.connect(self._on_edit)
+        title_row.addWidget(self.edit_btn)
+        outer.addLayout(title_row)
 
         subtitle = QLabel(
             "Prospect, well, county/state, key dates, and total cash-call costs for "
-            "the active project. (Editable form coming next ticket — currently read-only.)"
+            "the active project. Click <b>Edit Project</b> to change anything except "
+            "the license binding (which is fixed at creation)."
         )
         subtitle.setStyleSheet("color: #5b6473;")
         subtitle.setWordWrap(True)
@@ -119,8 +157,12 @@ class ProjectSetupTab(QWidget):
             self.stage_label.setText("No project selected")
             self.stage_summary_label.setText("")
             self.stage_banner.setVisible(False)
+            self.test_banner.setVisible(False)
+            self.edit_btn.setEnabled(False)
             return
 
+        self.edit_btn.setEnabled(True)
+        self.test_banner.setVisible(bool(project.is_test))
         self._refresh_stage_banner(project)
 
         # Pull a few extra columns directly from the DB for nicer display.
@@ -148,6 +190,15 @@ class ProjectSetupTab(QWidget):
         self._fields["license_customer"].setText(project.license_customer or "—")
         self._fields["license_expires"].setText((project.license_expires_at or "—")[:10])
         self._fields["status"].setText((project.status or "").title())
+
+    def _on_edit(self) -> None:
+        if self._project is None:
+            return
+        dlg = EditProjectDialog(self._project, parent=self)
+        if dlg.exec() and dlg.saved_project is not None:
+            self._project = dlg.saved_project
+            self.set_project(self._project)
+            self.projectEdited.emit(self._project.id)
 
     def _refresh_stage_banner(self, project: ProjectRow) -> None:
         if not project.workflow_id:

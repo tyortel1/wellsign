@@ -1,0 +1,25 @@
+# WellSign — line ending normalisation
+# Without this, every commit on Windows triggers "LF will be replaced by CRLF"
+# warnings. We normalise to LF in the repo and let git checkout convert to
+# CRLF on Windows working trees automatically.
+
+* text=auto eol=lf
+
+# Binary file types — never normalise
+*.pdf      binary
+*.xlsx     binary
+*.xls      binary
+*.docx     binary
+*.doc      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
+*.exe      binary
+*.dll      binary
+*.so       binary
+*.pyd      binary
+*.zip      binary
+*.wslicense binary
+*.pem      binary

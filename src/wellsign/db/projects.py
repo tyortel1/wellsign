@@ -12,6 +12,7 @@ from datetime import datetime
 
 from wellsign.app_paths import project_dir
 from wellsign.db.migrate import connect
+from wellsign.util.audit import log_action
 
 
 @dataclass
@@ -140,6 +141,27 @@ def insert_project(
 
     project = get_project(new_id)
     assert project is not None
+    log_action(
+        "project_created",
+        project_id=project.id,
+        target_type="project",
+        target_id=project.id,
+        metadata={
+            "name": project.name,
+            "well_name": project.well_name,
+            "region": project.region,
+            "license_customer": project.license_customer,
+            "license_key_id": license_key_id,
+            "is_test": bool(is_test),
+        },
+    )
+    log_action(
+        "license_verified",
+        project_id=project.id,
+        target_type="license",
+        target_id=license_key_id,
+        metadata={"customer": license_customer, "expires_at": license_expires_at},
+    )
     return project
 
 
@@ -165,3 +187,62 @@ def set_phase(project_id: str, new_phase: str) -> None:
             (new_phase, now, now, project_id),
         )
         conn.commit()
+
+
+def update_project(
+    project_id: str,
+    *,
+    name: str,
+    prospect_name: str | None,
+    well_name: str | None,
+    operator_llc: str | None,
+    county: str | None,
+    state: str | None,
+    agreement_date: str | None,
+    close_deadline: str | None,
+    total_llg_cost: float | None,
+    total_dhc_cost: float | None,
+) -> ProjectRow:
+    """Update editable project fields. License + workflow + phase are NOT touched.
+
+    Used by EditProjectDialog. License binding is immutable after creation;
+    phase has its own setter (``set_phase``); workflow swap is intentionally
+    not supported (would orphan investor_stage_runs).
+    """
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    with connect() as conn:
+        conn.execute(
+            """
+            UPDATE projects
+               SET name             = :name,
+                   prospect_name    = :prospect_name,
+                   well_name        = :well_name,
+                   operator_llc     = :operator_llc,
+                   county           = :county,
+                   state            = :state,
+                   agreement_date   = :agreement_date,
+                   close_deadline   = :close_deadline,
+                   total_llg_cost   = :total_llg_cost,
+                   total_dhc_cost   = :total_dhc_cost,
+                   updated_at       = :now
+             WHERE id = :id
+            """,
+            {
+                "id": project_id,
+                "name": name,
+                "prospect_name": prospect_name,
+                "well_name": well_name,
+                "operator_llc": operator_llc,
+                "county": county,
+                "state": state,
+                "agreement_date": agreement_date,
+                "close_deadline": close_deadline,
+                "total_llg_cost": total_llg_cost,
+                "total_dhc_cost": total_dhc_cost,
+                "now": now,
+            },
+        )
+        conn.commit()
+    result = get_project(project_id)
+    assert result is not None
+    return result

@@ -33,12 +33,14 @@ from wellsign.ui.tabs import (
 
 
 class ProjectWorkspace(QWidget):
-    phaseChanged = Signal(str)  # emits project_id when phase advances
+    phaseChanged = Signal(str)    # emits project_id when phase advances
+    projectEdited = Signal(str)   # emits project_id when an edit was saved
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._project: ProjectRow | None = None
         self._build()
+        self.setup_tab.projectEdited.connect(self._on_setup_edited)
 
     def _build(self) -> None:
         outer = QVBoxLayout(self)
@@ -196,6 +198,18 @@ class ProjectWorkspace(QWidget):
         self._project = get_project(self._project.id)
         self._refresh_phase_banner()
         self.phaseChanged.emit(self._project.id if self._project else "")
+
+    # ---- edit forwarding ------------------------------------------------
+    def _on_setup_edited(self, project_id: str) -> None:
+        """ProjectSetupTab signalled that the operator just saved an edit.
+
+        Re-load the row, refresh every tab (subtitle, phase banner, totals
+        cascade into Investors / Documents / Costs etc.), and bubble up to
+        MainWindow so the navigator dot + dashboard table refresh too.
+        """
+        self._project = get_project(project_id)
+        self.set_project(self._project)
+        self.projectEdited.emit(project_id)
 
     def _on_set_phase(self) -> None:
         if self._project is None:
