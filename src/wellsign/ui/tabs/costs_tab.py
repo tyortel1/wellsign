@@ -39,6 +39,7 @@ from wellsign.db.costs import (
 )
 from wellsign.db.projects import ProjectRow
 from wellsign.ui.dialogs import CostLineDialog
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 _HEADERS = [
     "Category", "Description", "Vendor", "Expected (AFE)",
@@ -109,6 +110,7 @@ class CostsTab(QWidget):
         self.delete_btn.setEnabled(False)
         self.delete_btn.clicked.connect(self._on_delete_selected)
         header.addWidget(self.delete_btn)
+        header.addWidget(HelpButton("costs"))
 
         subtitle = QLabel(
             "AFE budget vs. actual costs with receipt attachments. Lines are grouped by "

@@ -47,6 +47,7 @@ from wellsign.db.workflows import (
     update_stage,
 )
 from wellsign.ui.dialogs import PickerMode, TemplatePickerDialog
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 # ===========================================================================
@@ -273,6 +274,7 @@ class WorkflowsPage(QWidget):
         self.delete_workflow_btn.setProperty("danger", True)
         self.delete_workflow_btn.clicked.connect(self._on_delete_workflow)
         header.addWidget(self.delete_workflow_btn)
+        header.addWidget(HelpButton("workflows"))
 
         self.description_label = QLabel("")
         self.description_label.setStyleSheet("color: #5b6473;")

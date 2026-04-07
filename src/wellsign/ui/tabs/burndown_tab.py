@@ -34,6 +34,7 @@ from wellsign.db.investors import count_investors, list_investors
 from wellsign.db.migrate import connect
 from wellsign.db.projects import ProjectRow
 from wellsign.db.workflows import TrafficLight, compute_traffic_light
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 class BurndownTab(QWidget):
@@ -55,6 +56,7 @@ class BurndownTab(QWidget):
         title.setFont(f)
         header.addWidget(title)
         header.addStretch(1)
+        header.addWidget(HelpButton("burndown"))
 
         subtitle = QLabel(
             "Outstanding investors vs. the close deadline. The grey ideal line is a "

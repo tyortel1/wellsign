@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from wellsign.db.investors import count_investors
 from wellsign.db.projects import list_projects
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 class DashboardPage(QWidget):
@@ -47,6 +48,7 @@ class DashboardPage(QWidget):
         self.new_btn = QPushButton("+ New Project")
         self.new_btn.clicked.connect(self.newProjectRequested.emit)
         header.addWidget(self.new_btn)
+        header.addWidget(HelpButton("dashboard"))
 
         subtitle = QLabel(
             "Side-by-side view of every project. Click a project in the navigator "

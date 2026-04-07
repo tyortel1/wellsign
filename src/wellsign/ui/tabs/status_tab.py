@@ -42,6 +42,7 @@ from wellsign.db.workflows import (
     get_stage,
     revert_investor_stage,
 )
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 _INVESTOR_ID_ROLE = Qt.ItemDataRole.UserRole + 1
 
@@ -90,6 +91,7 @@ class StatusTab(QWidget):
         self.advance_btn.setToolTip("Complete the selected investor's current stage and start the next one")
         self.advance_btn.clicked.connect(self._on_advance)
         header.addWidget(self.advance_btn)
+        header.addWidget(HelpButton("status"))
 
         subtitle = QLabel(
             "Per-investor dashboard: current stage, days in stage, SLA remaining, "

@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from wellsign.db.templates import get_doc_template, list_doc_templates
 from wellsign.ui.dialogs import FieldMappingDialog, NewDocTemplateDialog
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 class DocTemplatesPage(QWidget):
@@ -48,6 +49,7 @@ class DocTemplatesPage(QWidget):
         self.new_btn = QPushButton("+ New Document Template")
         self.new_btn.clicked.connect(self._on_new)
         header.addWidget(self.new_btn)
+        header.addWidget(HelpButton("doc_templates"))
 
         subtitle = QLabel(
             "Reusable PDF templates. Each template has form fields that get auto-filled "

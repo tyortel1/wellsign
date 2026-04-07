@@ -43,6 +43,7 @@ from wellsign.db.investors import list_investors
 from wellsign.db.migrate import connect
 from wellsign.db.projects import ProjectRow
 from wellsign.db.workflows import get_stage
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 @dataclass
@@ -113,6 +114,7 @@ class ActivityTab(QWidget):
         self.refresh_btn.setProperty("secondary", True)
         self.refresh_btn.clicked.connect(self.refresh)
         header.addWidget(self.refresh_btn)
+        header.addWidget(HelpButton("activity"))
 
         subtitle = QLabel(
             "Every event on this project in chronological order — emails sent, "

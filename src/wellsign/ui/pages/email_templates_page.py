@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 
 from wellsign.db.templates import get_email_template, list_email_templates
 from wellsign.ui.dialogs import NewEmailTemplateDialog
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 class EmailTemplatesPage(QWidget):
@@ -41,6 +42,7 @@ class EmailTemplatesPage(QWidget):
         self.new_btn = QPushButton("+ New Email Template")
         self.new_btn.clicked.connect(self._on_new)
         header.addWidget(self.new_btn)
+        header.addWidget(HelpButton("email_templates"))
 
         subtitle = QLabel(
             "Reusable email subject + body templates with merge variables. "

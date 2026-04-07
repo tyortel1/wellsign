@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from wellsign.db.projects import ProjectRow
 from wellsign.db.reconcile import compute_reconciliation
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 _HEADERS = ["Investor", "Entity", "WI %", "Contributed", "Share", "Action", "Amount"]
 
@@ -61,6 +62,7 @@ class ReconcileTab(QWidget):
         title.setFont(f)
         header.addWidget(title)
         header.addStretch(1)
+        header.addWidget(HelpButton("reconcile"))
 
         subtitle = QLabel(
             "End-of-drilling surplus / shortfall calculator. Compares total raised "

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from wellsign.db.investors import get_investor, list_investors
 from wellsign.db.projects import ProjectRow
 from wellsign.db.workflows import TrafficLight, compute_traffic_light
+from wellsign.ui.dialogs.help_dialog import HelpButton
 from wellsign.ui.dialogs.import_investors_dialog import ImportInvestorsDialog
 from wellsign.ui.dialogs.investor_detail_dialog import InvestorDetailDialog
 from wellsign.ui.dialogs.investor_dialog import InvestorDialog
@@ -71,6 +72,7 @@ class InvestorsTab(QWidget):
         self.add_btn.clicked.connect(self._on_add)
         header.addWidget(self.import_btn)
         header.addWidget(self.add_btn)
+        header.addWidget(HelpButton("investors"))
 
         self.summary_label = QLabel("No project selected.")
         self.summary_label.setStyleSheet("color: #5b6473;")
