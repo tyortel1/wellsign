@@ -27,6 +27,76 @@ from PySide6.QtWidgets import (
 
 from wellsign.ui.pages.workflow_visual import WorkflowVisualWidget
 
+
+# ===========================================================================
+# _TemplateChip — click-body-to-edit, click-✕-to-remove
+# ===========================================================================
+class _TemplateChip(QFrame):
+    """A rounded chip with a text label + a small ✕ button.
+
+    ``on_edit`` fires when the operator clicks the text (or double-clicks).
+    ``on_remove`` fires when the operator clicks the ✕. The two actions are
+    physically separated so a stray click can't drop a binding.
+    """
+
+    def __init__(
+        self,
+        text: str,
+        on_edit,
+        on_remove,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._on_edit = on_edit
+        self._on_remove = on_remove
+
+        self.setObjectName("TemplateChip")
+        self.setStyleSheet(
+            "QFrame#TemplateChip { background: #f0f3fa; border: 1px solid #d8dce3; "
+            "border-radius: 12px; }"
+            "QFrame#TemplateChip:hover { background: #e2ecff; border-color: #b6c7ea; }"
+        )
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 2, 4, 2)
+        layout.setSpacing(4)
+
+        self._label = QLabel(text)
+        self._label.setStyleSheet("background: transparent; border: none; color: #1f2430;")
+        self._label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._label.setToolTip("Click to edit this template")
+        # Clicking the text opens the editor
+        self._label.mousePressEvent = lambda _evt: self._fire_edit()  # type: ignore[assignment]
+        layout.addWidget(self._label)
+
+        self._remove_btn = QPushButton("✕")
+        self._remove_btn.setFlat(True)
+        self._remove_btn.setFixedSize(20, 20)
+        self._remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._remove_btn.setStyleSheet(
+            "QPushButton { background: transparent; border: none; color: #8a93a3; "
+            "font-weight: bold; }"
+            "QPushButton:hover { color: #d1242f; }"
+        )
+        self._remove_btn.setToolTip("Remove this binding")
+        self._remove_btn.clicked.connect(self._fire_remove)
+        layout.addWidget(self._remove_btn)
+
+    def mouseDoubleClickEvent(self, event) -> None:  # noqa: N802 - Qt override
+        self._fire_edit()
+
+    def _fire_edit(self) -> None:
+        try:
+            self._on_edit()
+        except Exception:
+            pass
+
+    def _fire_remove(self) -> None:
+        try:
+            self._on_remove()
+        except Exception:
+            pass
+
+from wellsign.db.templates import get_doc_template, get_email_template
 from wellsign.db.workflows import (
     EXIT_LABELS,
     ExitCondition,
@@ -46,7 +116,12 @@ from wellsign.db.workflows import (
     reorder_stages,
     update_stage,
 )
-from wellsign.ui.dialogs import PickerMode, TemplatePickerDialog
+from wellsign.ui.dialogs import (
+    NewDocTemplateDialog,
+    NewEmailTemplateDialog,
+    PickerMode,
+    TemplatePickerDialog,
+)
 from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
@@ -132,9 +207,10 @@ class StageCard(QFrame):
 
         if self._stage.docs:
             for d in self._stage.docs:
-                chip = self._make_chip(
+                chip = _TemplateChip(
                     d.doc_template_name,
-                    on_remove=lambda _evt=None, _id=d.id: self._on_remove_doc(_id),
+                    on_edit=lambda _tid=d.doc_template_id: self._on_edit_doc(_tid),
+                    on_remove=lambda _id=d.id: self._on_remove_doc(_id),
                 )
                 docs_row.addWidget(chip)
         else:
@@ -160,9 +236,10 @@ class StageCard(QFrame):
         if self._stage.emails:
             for e in self._stage.emails:
                 wait_text = f"  (wait {e.wait_days}d)" if e.wait_days else "  (immediate)"
-                chip = self._make_chip(
+                chip = _TemplateChip(
                     e.email_template_name + wait_text,
-                    on_remove=lambda _evt=None, _id=e.id: self._on_remove_email(_id),
+                    on_edit=lambda _tid=e.email_template_id: self._on_edit_email(_tid),
+                    on_remove=lambda _id=e.id: self._on_remove_email(_id),
                 )
                 emails_row.addWidget(chip)
         else:
@@ -181,16 +258,31 @@ class StageCard(QFrame):
     def stage(self) -> StageRow:
         return self._stage
 
-    def _make_chip(self, text: str, on_remove) -> QLabel:
-        chip = QLabel(f"  {text}  ✕  ")
-        chip.setStyleSheet(
-            "QLabel { background: #f0f3fa; color: #1f2430; border: 1px solid #d8dce3; "
-            "border-radius: 12px; padding: 4px 4px; }"
-            "QLabel:hover { background: #e2ecff; }"
-        )
-        chip.setCursor(Qt.CursorShape.PointingHandCursor)
-        chip.mousePressEvent = lambda evt, cb=on_remove: cb(evt)  # type: ignore[assignment]
-        return chip
+    def _on_edit_doc(self, template_id: str) -> None:
+        """Open the doc template editor for the template bound to this chip."""
+        tpl = get_doc_template(template_id)
+        if tpl is None:
+            QMessageBox.warning(
+                self, "Template missing",
+                "This document template no longer exists. Remove the binding.",
+            )
+            return
+        dlg = NewDocTemplateDialog(self, existing=tpl)
+        if dlg.exec():
+            self.changed.emit()
+
+    def _on_edit_email(self, template_id: str) -> None:
+        """Open the email template editor for the template bound to this chip."""
+        tpl = get_email_template(template_id)
+        if tpl is None:
+            QMessageBox.warning(
+                self, "Template missing",
+                "This email template no longer exists. Remove the binding.",
+            )
+            return
+        dlg = NewEmailTemplateDialog(self, existing=tpl)
+        if dlg.exec():
+            self.changed.emit()
 
     def _on_field_changed(self) -> None:
         update_stage(
@@ -221,6 +313,12 @@ class StageCard(QFrame):
             self.changed.emit()
 
     def _on_remove_doc(self, item_id: str) -> None:
+        ans = QMessageBox.question(
+            self, "Remove doc binding",
+            "Remove this document from the stage? The template itself is not deleted.",
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
         detach_doc_from_stage(item_id)
         self.changed.emit()
 
@@ -232,6 +330,16 @@ class StageCard(QFrame):
                     self._stage.id, tid, wait_days=dlg.result.wait_days
                 )
             self.changed.emit()
+
+    def _on_remove_email(self, item_id: str) -> None:
+        ans = QMessageBox.question(
+            self, "Remove email binding",
+            "Remove this email from the stage? The template itself is not deleted.",
+        )
+        if ans != QMessageBox.StandardButton.Yes:
+            return
+        detach_email_from_stage(item_id)
+        self.changed.emit()
 
 
 # ===========================================================================

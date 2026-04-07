@@ -178,10 +178,14 @@ def _seed_email_templates() -> None:
         body_html=(
             "<p>Hi {{investor_first_name}},</p>"
             "<p>Thanks for signing. Wire instructions for your cash call:</p>"
-            "<p><b>LLG (${{llg_amount}}) → Decker Exploration, Inc.</b><br>"
+            "<p><b>LLG ({{llg_amount}}) → Decker Exploration, Inc.</b><br>"
             "Routing / account on the attached PDF.</p>"
-            "<p><b>DHC (${{dhc_amount}}) → Paloma Operating LLC</b><br>"
+            "<p><b>DHC ({{dhc_amount}}) → {{operator_name}}</b><br>"
             "Routing / account on the attached PDF.</p>"
+            "<p><b>Important:</b> if you wire the DHC funds, please add a "
+            "<b>$15.00 bank wire fee</b> to the wire amount — our bank "
+            "charges us $15 to receive each wire and we have to pass that "
+            "through to keep the cash call accurate.</p>"
             "<p>Funds due by {{close_deadline}}.</p>"
             "<p>— {{operator_name}}</p>"
         ),

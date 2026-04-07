@@ -178,12 +178,35 @@ def _insert_row(
     return new_id
 
 
+def compute_dhc_expected(
+    base_dhc: float,
+    payment_preference: str | None,
+    wire_fee: float,
+) -> float:
+    """Compute the operator-side expected DHC amount for an investor.
+
+    Per Tanner's email: when the investor wires DHC to Paloma, Paloma's
+    bank charges $15 to receive the wire and Paloma passes that fee to the
+    investor — so a wire-preferring investor's expected DHC is
+    ``base + wire_fee``. Check-preferring investors pay the base only.
+
+    LLG always pays Decker; Decker's wire fee handling (if any) is not
+    Paloma's concern, so we don't apply this fee to LLG.
+    """
+    if base_dhc <= 0:
+        return 0.0
+    if (payment_preference or "").lower() == "wire" and wire_fee > 0:
+        return base_dhc + wire_fee
+    return base_dhc
+
+
 def ensure_payments_for_investor(investor: InvestorRow) -> tuple[PaymentRow, PaymentRow]:
     """Idempotent — create or refresh the LLG + DHC rows for an investor.
 
     * If no rows exist yet → INSERT both at the investor's current amounts.
     * If rows exist and are still ``expected`` → UPDATE expected_amount to
-      match the investor's latest llg_amount / dhc_amount (handles WI changes).
+      match the investor's latest llg_amount / dhc_amount (handles WI changes
+      AND payment-preference flips that change the DHC wire-fee passthrough).
     * If rows exist and are already ``received`` (or ``partial``) → leave them
       alone. Historical facts shouldn't get rewritten by a WI tweak.
 
@@ -191,11 +214,21 @@ def ensure_payments_for_investor(investor: InvestorRow) -> tuple[PaymentRow, Pay
     investor automatically. Also called by update_project's amount-cascade
     (see ``recalc_for_project``).
     """
+    # Deferred import avoids a circular dependency with db/projects.py
+    from wellsign.db.projects import get_project
+
+    project = get_project(investor.project_id)
+    wire_fee = float(project.wire_fee) if project else 0.0
+
     existing = list_for_investor(investor.id)
     by_type = {p.payment_type: p for p in existing}
 
     expected_llg = float(investor.llg_amount or 0)
-    expected_dhc = float(investor.dhc_amount or 0)
+    expected_dhc = compute_dhc_expected(
+        float(investor.dhc_amount or 0),
+        investor.payment_preference,
+        wire_fee,
+    )
 
     if "llg" not in by_type:
         llg_id = _insert_row(

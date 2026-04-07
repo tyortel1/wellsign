@@ -52,6 +52,12 @@ CREATE TABLE IF NOT EXISTS projects (
     phase               TEXT NOT NULL DEFAULT 'investigating',
     phase_entered_at    TEXT,
 
+    -- Bank wire fee passthrough — added to DHC expected for wire-preferring
+    -- investors. Per Tanner's email: "$15.00 bank wire fee, that our bank
+    -- charges us, must be added to the total wire amount." Defaults to $15
+    -- but the operator can edit per project on EditProjectDialog.
+    wire_fee            REAL NOT NULL DEFAULT 15.00,
+
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
 );

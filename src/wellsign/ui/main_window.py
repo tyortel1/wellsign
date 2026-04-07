@@ -108,11 +108,16 @@ class MainWindow(QMainWindow):
 
     # ---- toolbar --------------------------------------------------------
     def _build_toolbar(self) -> None:
+        from PySide6.QtCore import QSize
+
         bar = QToolBar("TopBar", self)
         bar.setObjectName("TopBar")
         bar.setMovable(False)
         bar.setFloatable(False)
         bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        # Force standard small toolbar — Qt's default is 24-32px which combined
+        # with the QToolBar padding makes the bar feel chunky.
+        bar.setIconSize(QSize(16, 16))
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
 
         bar.addAction(self.new_project_action)
@@ -221,10 +226,19 @@ class MainWindow(QMainWindow):
     def _wire(self) -> None:
         self.navigator.selectionChangedTo.connect(self._on_nav_selection)
         self.dashboard_page.newProjectRequested.connect(self._open_new_project_dialog)
+        self.dashboard_page.projectActivated.connect(self._jump_to_project)
         self.project_workspace.phaseChanged.connect(self._on_phase_changed)
         self.project_workspace.projectEdited.connect(self._on_project_edited)
         self.workflows_page.workflowCreated.connect(self._on_workflow_created)
         self.workflows_page.workflowDeleted.connect(self._on_workflow_deleted)
+
+    def _jump_to_project(self, project_id: str) -> None:
+        """Double-click on a dashboard row → focus that project in the navigator.
+
+        The navigator's selection change handler already swaps the stack to
+        ProjectWorkspace and loads the project, so we just drive it.
+        """
+        self.navigator.refresh_projects(select_id=project_id)
 
     def _on_workflow_created(self, workflow_id: str) -> None:
         self.navigator.refresh_workflows(select_id=workflow_id)

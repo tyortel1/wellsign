@@ -153,31 +153,47 @@ class HelpDialog(QDialog):
 
 
 class HelpButton(QPushButton):
-    """Tiny ``?`` button that opens HelpDialog scoped to a specific topic.
+    """Round ``?`` button that opens HelpDialog scoped to a specific topic.
 
     Drop one into any tab's header HBoxLayout::
 
         header.addWidget(HelpButton("payments"))
+
+    Implementation note: the global app QSS in ``resources/style.qss``
+    forces ``QPushButton { padding: 7px 16px; min-height: 18px }`` which
+    will eat the 28x28 fixed size and clip the "?" to a tiny dot. We
+    override padding/min-height inline AND use a larger font so the
+    glyph is comfortably visible inside the circle.
     """
 
     def __init__(self, topic_key: str, parent: QWidget | None = None) -> None:
         super().__init__("?", parent)
         self._topic_key = topic_key
         self.setObjectName("HelpButton")
-        self.setFixedSize(28, 28)
-        self.setToolTip("Help on this view (or use Help menu → All Topics)")
+        self.setFixedSize(32, 32)
+        self.setToolTip("Help on this view (or press F1 / use Help menu)")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setStyleSheet(
             "QPushButton#HelpButton { "
-            "    background: #f0f3fa; "
+            "    background-color: #e2ecff; "
             "    color: #1f6feb; "
-            "    border: 1px solid #d8dce3; "
-            "    border-radius: 14px; "
+            "    border: 1px solid #1f6feb; "
+            "    border-radius: 16px; "
+            "    padding: 0px; "
+            "    min-height: 0px; "
+            "    min-width: 0px; "
             "    font-weight: bold; "
-            "    font-size: 12pt; "
+            "    font-size: 16pt; "
             "} "
             "QPushButton#HelpButton:hover { "
-            "    background: #e2ecff; "
+            "    background-color: #1f6feb; "
+            "    color: #ffffff; "
             "    border-color: #1f6feb; "
+            "} "
+            "QPushButton#HelpButton:pressed { "
+            "    background-color: #14489f; "
+            "    color: #ffffff; "
+            "    border-color: #14489f; "
             "}"
         )
         self.clicked.connect(self._on_click)

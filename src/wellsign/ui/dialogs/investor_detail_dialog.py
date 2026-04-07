@@ -76,7 +76,8 @@ class InvestorDetailDialog(QDialog):
 
         self.setWindowTitle(f"{investor.display_name} — Investor")
         self.setModal(True)
-        self.setMinimumSize(980, 760)
+        self.setMinimumSize(820, 680)
+        self.resize(900, 740)
 
         self._build()
         self._populate_edit_fields()
@@ -89,22 +90,16 @@ class InvestorDetailDialog(QDialog):
         outer.setSpacing(0)
 
         self.tabs = QTabWidget()
-        self.tabs.setTabPosition(QTabWidget.TabPosition.West)
+        self.tabs.setTabPosition(QTabWidget.TabPosition.North)
         self.tabs.setDocumentMode(True)
-        self.tabs.setStyleSheet(
-            # Give the vertical tabs a bit more breathing room
-            "QTabBar::tab { min-width: 90px; padding: 12px 18px; }"
-            "QTabBar::tab:selected { background: #ffffff; color: #1f6feb; "
-            "border-right: 2px solid #1f6feb; }"
-        )
 
         self.edit_tab = self._build_edit_tab()
         self.activity_tab = self._build_activity_tab()
 
-        self.tabs.addTab(self.edit_tab, "Edit")
         self.tabs.addTab(self.activity_tab, "Activity")
+        self.tabs.addTab(self.edit_tab, "Edit")
         # Default to Activity since that's usually what you come here to see
-        self.tabs.setCurrentIndex(1)
+        self.tabs.setCurrentIndex(0)
 
         outer.addWidget(self.tabs, 1)
 
@@ -122,10 +117,26 @@ class InvestorDetailDialog(QDialog):
     # EDIT TAB
     # =====================================================================
     def _build_edit_tab(self) -> QWidget:
+        # Wrap the form in a scroll area so it never gets squished by a
+        # small window — content stays at its preferred size and the user
+        # scrolls if needed.
+        outer_widget = QWidget()
+        outer_layout = QVBoxLayout(outer_widget)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea { background: #ffffff; }")
+        outer_layout.addWidget(scroll, 1)
+
         container = QWidget()
+        container.setStyleSheet("background: #ffffff;")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(28, 24, 28, 20)
         layout.setSpacing(14)
+        scroll.setWidget(container)
 
         # Header
         title = QLabel("Edit investor")
@@ -148,6 +159,7 @@ class InvestorDetailDialog(QDialog):
         ident_form = QFormLayout()
         ident_form.setHorizontalSpacing(14)
         ident_form.setVerticalSpacing(8)
+        ident_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self.first_edit = QLineEdit()
         self.last_edit = QLineEdit()
@@ -155,6 +167,8 @@ class InvestorDetailDialog(QDialog):
         self.title_edit = QLineEdit()
         self.email_edit = QLineEdit()
         self.phone_edit = QLineEdit()
+        for w in (self.first_edit, self.last_edit, self.entity_edit, self.title_edit, self.email_edit, self.phone_edit):
+            w.setMinimumWidth(280)
 
         ident_form.addRow("First name:", self.first_edit)
         ident_form.addRow("Last name:", self.last_edit)
@@ -236,7 +250,7 @@ class InvestorDetailDialog(QDialog):
         actions.addWidget(self.save_btn)
 
         layout.addLayout(actions)
-        return container
+        return outer_widget
 
     def _populate_edit_fields(self) -> None:
         inv = self._investor

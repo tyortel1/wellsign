@@ -103,6 +103,19 @@ class EditProjectDialog(QDialog):
         self.dhc_spin.setGroupSeparatorShown(True)
         self.dhc_spin.setSingleStep(10_000)
 
+        # Wire fee passthrough — added to DHC for wire-preferring investors
+        self.wire_fee_spin = QDoubleSpinBox()
+        self.wire_fee_spin.setRange(0, 500)
+        self.wire_fee_spin.setDecimals(2)
+        self.wire_fee_spin.setPrefix("$ ")
+        self.wire_fee_spin.setSingleStep(1)
+        self.wire_fee_spin.setValue(self._project.wire_fee)
+        self.wire_fee_spin.setToolTip(
+            "Bank wire fee passthrough. Added to the DHC expected amount for "
+            "any investor whose payment preference is 'wire'. Tanner's email "
+            "specifies $15.00 for Paloma's BoA wire fee. Set to 0 to disable."
+        )
+
         form.addRow("Project name:", self.name_edit)
         form.addRow("Prospect name:", self.prospect_edit)
         form.addRow("Well name:", self.well_edit)
@@ -113,6 +126,7 @@ class EditProjectDialog(QDialog):
         form.addRow("Close deadline:", self.close_edit)
         form.addRow("Total LLG cost (→ Decker):", self.llg_spin)
         form.addRow("Total DHC cost (→ Paloma):", self.dhc_spin)
+        form.addRow("Wire fee (DHC passthrough):", self.wire_fee_spin)
 
         outer.addLayout(form)
         outer.addStretch(1)
@@ -205,10 +219,21 @@ class EditProjectDialog(QDialog):
                 close_deadline=close_iso,
                 total_llg_cost=self.llg_spin.value(),
                 total_dhc_cost=self.dhc_spin.value(),
+                wire_fee=self.wire_fee_spin.value(),
             )
         except Exception as e:  # noqa: BLE001
             QMessageBox.warning(self, "Save failed", f"{e}")
             return
+
+        # If the wire fee changed, refresh wire-preferring investors' DHC
+        # expected amounts. recalc_for_project is idempotent and only touches
+        # rows still in 'expected' status — already-received payments are safe.
+        try:
+            from wellsign.db.payments import recalc_for_project
+            recalc_for_project(self._project.id)
+        except Exception:
+            pass
+
         self.accept()
 
     @property

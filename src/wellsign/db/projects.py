@@ -31,6 +31,7 @@ class ProjectRow:
     workflow_id: str | None = None
     phase: str = "investigating"
     phase_entered_at: str | None = None
+    wire_fee: float = 15.00  # bank wire fee passthrough on DHC, see Tanner's email
 
     @property
     def display_label(self) -> str:
@@ -63,6 +64,7 @@ def _row_to_project(row: sqlite3.Row) -> ProjectRow:
         workflow_id=_safe("workflow_id"),
         phase=_safe("phase", "investigating") or "investigating",
         phase_entered_at=_safe("phase_entered_at"),
+        wire_fee=float(_safe("wire_fee", 15.00) or 15.00),
     )
 
 
@@ -209,6 +211,7 @@ def update_project(
     close_deadline: str | None,
     total_llg_cost: float | None,
     total_dhc_cost: float | None,
+    wire_fee: float = 15.00,
 ) -> "ProjectRow":
     """Update editable project fields. License + workflow + phase are NOT touched.
 
@@ -231,6 +234,7 @@ def update_project(
                    close_deadline   = :close_deadline,
                    total_llg_cost   = :total_llg_cost,
                    total_dhc_cost   = :total_dhc_cost,
+                   wire_fee         = :wire_fee,
                    updated_at       = :now
              WHERE id = :id
             """,
@@ -246,6 +250,7 @@ def update_project(
                 "close_deadline": close_deadline,
                 "total_llg_cost": total_llg_cost,
                 "total_dhc_cost": total_dhc_cost,
+                "wire_fee": wire_fee,
                 "now": now,
             },
         )
@@ -262,6 +267,7 @@ def update_project(
             "well_name": well_name,
             "total_llg_cost": total_llg_cost,
             "total_dhc_cost": total_dhc_cost,
+            "wire_fee": wire_fee,
         },
     )
     return result

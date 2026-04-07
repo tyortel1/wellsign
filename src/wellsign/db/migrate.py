@@ -37,6 +37,7 @@ def run_migrations(db_path: Path | None = None) -> int:
     conn = connect(db_path)
     try:
         conn.executescript(_load_schema_sql())
+        _ensure_columns(conn)
         cur = conn.execute("SELECT COALESCE(MAX(version), 0) FROM schema_version")
         existing = cur.fetchone()[0]
         if existing < CURRENT_VERSION:
@@ -48,3 +49,22 @@ def run_migrations(db_path: Path | None = None) -> int:
     finally:
         conn.close()
     return CURRENT_VERSION
+
+
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """Idempotent ALTER TABLE for columns added after the initial schema.
+
+    SQLite has no ``ADD COLUMN IF NOT EXISTS`` — we wrap each ALTER in a
+    try/except on the duplicate-column error so this method is safe to run
+    on every startup. Append new entries here when the schema gains columns.
+    """
+    additions: list[tuple[str, str, str]] = [
+        # (table, column, type + default clause)
+        ("projects", "wire_fee", "REAL NOT NULL DEFAULT 15.00"),
+    ]
+    for table, column, definition in additions:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError as e:
+            if "duplicate column" not in str(e).lower():
+                raise
