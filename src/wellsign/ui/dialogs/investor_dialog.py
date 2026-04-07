@@ -39,6 +39,7 @@ from wellsign.db.investors import (
     update_investor,
 )
 from wellsign.db.projects import ProjectRow, get_project_totals
+from wellsign.db.workflows import start_workflow_for_investor
 from wellsign.util.calc import compute_amounts
 from wellsign.util.crypto import decrypt_pii, mask_pii
 
@@ -454,6 +455,9 @@ class InvestorDialog(QDialog):
                 bank_account=self.bank_account_field.value_for_save(),
                 **common,
             )
+            # Kick off the project's workflow at stage 1 so traffic lights
+            # come alive immediately. No-op if the project has no workflow.
+            start_workflow_for_investor(self._saved.id, self._project.id)
         else:
             # Update — PII fields return None (= leave alone) unless modified
             self._saved = update_investor(

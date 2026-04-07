@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from wellsign.db.migrate import connect
@@ -23,9 +24,23 @@ class DocTemplateRow:
     notary_required: bool
     is_global: bool
     created_at: str
+    field_mapping: dict[str, str] = field(default_factory=dict)
 
 
 def _row_to_doc_template(row: sqlite3.Row) -> DocTemplateRow:
+    raw_mapping = None
+    try:
+        raw_mapping = row["field_mapping"]
+    except (KeyError, IndexError):
+        raw_mapping = None
+    parsed_mapping: dict[str, str] = {}
+    if raw_mapping:
+        try:
+            parsed_mapping = json.loads(raw_mapping)
+            if not isinstance(parsed_mapping, dict):
+                parsed_mapping = {}
+        except (json.JSONDecodeError, TypeError):
+            parsed_mapping = {}
     return DocTemplateRow(
         id=row["id"],
         name=row["name"],
@@ -35,7 +50,20 @@ def _row_to_doc_template(row: sqlite3.Row) -> DocTemplateRow:
         notary_required=bool(row["notary_required"]),
         is_global=bool(row["is_global"]),
         created_at=row["created_at"],
+        field_mapping=parsed_mapping,
     )
+
+
+def update_doc_template_mapping(template_id: str, mapping: dict[str, str]) -> None:
+    """Persist a PDF-field-name → system-merge-variable map to the template row."""
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    payload = json.dumps(mapping, sort_keys=True)
+    with connect() as conn:
+        conn.execute(
+            "UPDATE document_templates SET field_mapping = ?, updated_at = ? WHERE id = ?",
+            (payload, now, template_id),
+        )
+        conn.commit()
 
 
 def list_doc_templates() -> list[DocTemplateRow]:

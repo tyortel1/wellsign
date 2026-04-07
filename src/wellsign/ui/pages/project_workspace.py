@@ -135,7 +135,11 @@ class ProjectWorkspace(QWidget):
         # Tabs that need the project explicitly:
         self.setup_tab.set_project(project)
         self.investors_tab.set_project(project)
+        self.documents_tab.set_project(project)
+        self.send_tab.set_project(project)
+        self.status_tab.set_project(project)
         self.costs_tab.set_project(project)
+        self.burndown_tab.set_project(project)
 
     # ---- phase banner ---------------------------------------------------
     def _refresh_phase_banner(self) -> None:

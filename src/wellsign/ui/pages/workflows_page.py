@@ -20,9 +20,12 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
+
+from wellsign.ui.pages.workflow_visual import WorkflowVisualWidget
 
 from wellsign.db.workflows import (
     EXIT_LABELS,
@@ -278,7 +281,16 @@ class WorkflowsPage(QWidget):
         outer.addLayout(header)
         outer.addWidget(self.description_label)
 
-        # Stages list
+        # Tab toggle: Edit / Visual
+        self.view_tabs = QTabWidget()
+        self.view_tabs.setDocumentMode(True)
+
+        # --- Edit tab: current stages list (drag-drop, edit in place) -----
+        edit_container = QWidget()
+        edit_layout = QVBoxLayout(edit_container)
+        edit_layout.setContentsMargins(0, 8, 0, 0)
+        edit_layout.setSpacing(0)
+
         self.stages_list = QListWidget()
         self.stages_list.setDragDropMode(QAbstractItemView.DragDropMode.InternalMove)
         self.stages_list.setDefaultDropAction(Qt.DropAction.MoveAction)
@@ -291,8 +303,15 @@ class WorkflowsPage(QWidget):
             "QListWidget::item:selected { background: transparent; }"
         )
         self.stages_list.model().rowsMoved.connect(self._on_rows_moved)
+        edit_layout.addWidget(self.stages_list, 1)
 
-        outer.addWidget(self.stages_list, 1)
+        # --- Visual tab: horizontal flowchart -----------------------------
+        self.visual_widget = WorkflowVisualWidget()
+
+        self.view_tabs.addTab(edit_container, "Edit")
+        self.view_tabs.addTab(self.visual_widget, "Visual")
+
+        outer.addWidget(self.view_tabs, 1)
 
     # -- public api -----------------------------------------------------
     def show_workflow(self, workflow_id: str) -> None:
@@ -312,6 +331,7 @@ class WorkflowsPage(QWidget):
                 "No workflow selected. Click + New Workflow to create one."
             )
             self.stages_list.clear()
+            self.visual_widget.show_workflow(None)
             self.new_stage_btn.setEnabled(False)
             self.delete_workflow_btn.setEnabled(False)
             return
@@ -324,6 +344,8 @@ class WorkflowsPage(QWidget):
         self.stages_list.clear()
         for stage in list_stages(self._workflow.id):
             self._append_stage(stage)
+
+        self.visual_widget.show_workflow(self._workflow.id)
 
     def _on_new_workflow(self) -> None:
         name, ok = QInputDialog.getText(

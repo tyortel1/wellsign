@@ -374,6 +374,39 @@ def insert_stage_run(
     return _to_run(row)
 
 
+def start_workflow_for_investor(investor_id: str, project_id: str) -> StageRunRow | None:
+    """Kick off the project's default workflow for a brand-new investor.
+
+    Looks up the project's ``workflow_id``, finds the first stage of that
+    workflow, and inserts a stage run putting the investor at stage 1 with
+    ``entered_at = now``. Returns ``None`` if the project has no workflow,
+    if the workflow has no stages, or if the investor is already in an
+    active stage run.
+
+    Used by InvestorDialog after a successful insert and by any future
+    bulk-import code.
+    """
+    # Deferred imports to avoid circular dependencies with db/projects.py
+    from wellsign.db.projects import get_project
+
+    if get_active_run(investor_id) is not None:
+        return None  # already running — don't double-start
+
+    project = get_project(project_id)
+    if project is None or not project.workflow_id:
+        return None
+
+    stages = list_stages(project.workflow_id)
+    if not stages:
+        return None
+
+    return insert_stage_run(
+        investor_id=investor_id,
+        project_id=project_id,
+        stage_id=stages[0].id,
+    )
+
+
 def complete_run(run_id: str) -> None:
     now = datetime.utcnow().isoformat(timespec="seconds")
     with connect() as conn:
@@ -416,6 +449,115 @@ class TrafficStatus:
     stage: StageRow | None
     days_in_stage: int
     days_remaining: int | None  # negative if overdue
+
+
+@dataclass
+class PendingSend:
+    investor_id: str
+    investor_name: str
+    investor_email: str       # rendered "To:" address for Outlook
+    stage_id: str
+    stage_name: str
+    email_template_id: str
+    email_template_name: str
+    subject: str              # already rendered, no {{merge_variables}}
+    body_html: str            # already rendered, no {{merge_variables}}
+    wait_days: int
+    entered_at: str
+    due_at: str               # ISO datetime when this email becomes due
+    days_overdue: int         # negative if not yet due
+    status: str               # 'due' | 'upcoming' | 'overdue'
+
+
+def compute_pending_sends(project_id: str) -> list[PendingSend]:
+    """Compute which emails are due to go out for each investor in this project.
+
+    Walks every investor's active stage run, expands the stage's attached
+    emails into PendingSend rows with rendered subject + body, filters out
+    pairs that already have a successful send_events row, and sorts by
+    status (overdue → due → upcoming).
+    """
+    # Deferred imports to avoid circular dependencies
+    from wellsign.db.investors import list_investors
+    from wellsign.db.projects import get_project
+    from wellsign.db.send_events import already_sent_pairs
+    from wellsign.db.templates import get_email_template
+    from wellsign.pdf_.fill import build_merge_context
+    from wellsign.pdf_.merge_vars import render_template
+
+    project = get_project(project_id)
+    if project is None:
+        return []
+
+    investors = list_investors(project_id)
+    sent_pairs = already_sent_pairs(project_id)
+    out: list[PendingSend] = []
+    today = datetime.utcnow()
+
+    for inv in investors:
+        run = get_active_run(inv.id)
+        if run is None:
+            continue
+        stage = get_stage(run.stage_id)
+        if stage is None or not stage.emails:
+            continue
+
+        try:
+            entered = datetime.fromisoformat(run.entered_at)
+        except ValueError:
+            entered = today
+
+        # Build the merge context once per investor — used for every attached email
+        ctx = build_merge_context(project, inv)
+
+        for email in stage.emails:
+            # Skip pairs we've already sent
+            if (inv.id, email.email_template_id) in sent_pairs:
+                continue
+
+            due_at = entered + timedelta(days=email.wait_days)
+            delta_days = (today - due_at).days  # positive = overdue
+
+            if delta_days < -2:
+                status = "upcoming"
+            elif delta_days < 0:
+                status = "due"  # about to be due
+            elif delta_days == 0:
+                status = "due"
+            else:
+                status = "overdue"
+
+            template = get_email_template(email.email_template_id)
+            if template is None:
+                continue
+
+            # Render merge variables in subject + body
+            rendered_subject = render_template(template.subject, ctx)
+            rendered_body    = render_template(template.body_html, ctx)
+
+            out.append(
+                PendingSend(
+                    investor_id=inv.id,
+                    investor_name=inv.display_name,
+                    investor_email=inv.email or "",
+                    stage_id=stage.id,
+                    stage_name=stage.name,
+                    email_template_id=email.email_template_id,
+                    email_template_name=email.email_template_name,
+                    subject=rendered_subject,
+                    body_html=rendered_body,
+                    wait_days=email.wait_days,
+                    entered_at=run.entered_at,
+                    due_at=due_at.isoformat(timespec="seconds"),
+                    days_overdue=delta_days,
+                    status=status,
+                )
+            )
+
+    # Order: overdue first (most overdue), then due, then upcoming
+    _status_rank = {"overdue": 0, "due": 1, "upcoming": 2}
+    out.sort(key=lambda p: (_status_rank[p.status], -p.days_overdue))
+    return out
 
 
 def compute_traffic_light(investor_id: str, warning_days: int = 3) -> TrafficStatus:

@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from wellsign.db.templates import get_doc_template, list_doc_templates
-from wellsign.ui.dialogs import NewDocTemplateDialog
+from wellsign.ui.dialogs import FieldMappingDialog, NewDocTemplateDialog
 
 
 class DocTemplatesPage(QWidget):
@@ -39,6 +39,12 @@ class DocTemplatesPage(QWidget):
         header.addWidget(title)
         header.addStretch(1)
 
+        self.map_btn = QPushButton("Map Fields…")
+        self.map_btn.setProperty("secondary", True)
+        self.map_btn.setToolTip("Bind PDF form fields on the selected template to merge variables")
+        self.map_btn.clicked.connect(self._on_map_fields)
+        header.addWidget(self.map_btn)
+
         self.new_btn = QPushButton("+ New Document Template")
         self.new_btn.clicked.connect(self._on_new)
         header.addWidget(self.new_btn)
@@ -50,8 +56,8 @@ class DocTemplatesPage(QWidget):
         subtitle.setStyleSheet("color: #5b6473;")
         subtitle.setWordWrap(True)
 
-        self.table = QTableWidget(0, 5)
-        self.table.setHorizontalHeaderLabels(["Name", "Type", "Page Size", "Notary", "Storage Path"])
+        self.table = QTableWidget(0, 6)
+        self.table.setHorizontalHeaderLabels(["Name", "Type", "Page Size", "Notary", "Mapped fields", "Storage Path"])
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -62,7 +68,8 @@ class DocTemplatesPage(QWidget):
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        h.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        h.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
+        h.setSectionResizeMode(5, QHeaderView.ResizeMode.Stretch)
 
         outer.addLayout(header)
         outer.addWidget(subtitle)
@@ -73,16 +80,18 @@ class DocTemplatesPage(QWidget):
         self._row_ids: list[str] = [t.id for t in templates]
         self.table.setRowCount(len(templates))
         for row, t in enumerate(templates):
+            mapped_count = len(t.field_mapping or {})
             cells = [
                 t.name,
                 t.doc_type,
                 (t.page_size or "").title(),
                 "Yes" if t.notary_required else "—",
+                f"{mapped_count} mapped" if mapped_count else "— none —",
                 t.storage_path,
             ]
             for col, text in enumerate(cells):
                 item = QTableWidgetItem(text)
-                if col == 3:
+                if col in (3, 4):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 self.table.setItem(row, col, item)
 
@@ -99,4 +108,17 @@ class DocTemplatesPage(QWidget):
             return
         dlg = NewDocTemplateDialog(self, existing=existing)
         if dlg.exec():
+            self.refresh()
+
+    def _on_map_fields(self) -> None:
+        row = self.table.currentRow()
+        if row < 0 or row >= len(self._row_ids):
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "No template", "Select a template row first.")
+            return
+        existing = get_doc_template(self._row_ids[row])
+        if existing is None:
+            return
+        dlg = FieldMappingDialog(existing, parent=self)
+        if dlg.exec() and dlg.saved:
             self.refresh()

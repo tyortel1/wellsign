@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QBrush, QColor
+from PySide6.QtGui import QBrush, QColor, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QPushButton,
     QTableWidget,
     QTableWidgetItem,
@@ -19,6 +22,7 @@ from PySide6.QtWidgets import (
 from wellsign.db.investors import get_investor, list_investors
 from wellsign.db.projects import ProjectRow
 from wellsign.db.workflows import TrafficLight, compute_traffic_light
+from wellsign.ui.dialogs.import_investors_dialog import ImportInvestorsDialog
 from wellsign.ui.dialogs.investor_dialog import InvestorDialog
 
 _INVESTOR_ID_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -41,6 +45,8 @@ class InvestorsTab(QWidget):
         super().__init__(parent)
         self._project: ProjectRow | None = None
         self._build()
+        # Accept drops of .xlsx files onto the tab itself
+        self.setAcceptDrops(True)
 
     def _build(self) -> None:
         outer = QVBoxLayout(self)
@@ -58,6 +64,8 @@ class InvestorsTab(QWidget):
 
         self.import_btn = QPushButton("Import from Excel…")
         self.import_btn.setProperty("secondary", True)
+        self.import_btn.setToolTip("Pick an .xlsx file — or drag one onto this tab")
+        self.import_btn.clicked.connect(self._on_import)
         self.add_btn = QPushButton("+ Add Investor")
         self.add_btn.clicked.connect(self._on_add)
         header.addWidget(self.import_btn)
@@ -151,6 +159,64 @@ class InvestorsTab(QWidget):
         dlg = InvestorDialog(self._project, parent=self)
         if dlg.exec() and dlg.saved_investor is not None:
             self.refresh()
+
+    def _on_import(self, initial: Path | None = None) -> None:
+        if self._project is None:
+            QMessageBox.information(
+                self, "No project", "Select a project from the navigator first."
+            )
+            return
+        dlg = ImportInvestorsDialog(
+            self._project,
+            parent=self,
+            initial_file=initial,
+        )
+        if dlg.exec():
+            msg_lines = [f"Imported {dlg.imported_count} investor(s)."]
+            if dlg.skipped_count:
+                msg_lines.append(f"Skipped {dlg.skipped_count} row(s).")
+            if dlg.errors:
+                msg_lines.append("")
+                msg_lines.append("Details:")
+                msg_lines.extend(dlg.errors[:10])
+                if len(dlg.errors) > 10:
+                    msg_lines.append(f"… and {len(dlg.errors) - 10} more")
+            QMessageBox.information(self, "Import complete", "\n".join(msg_lines))
+            self.refresh()
+
+    # ---- drag-drop -------------------------------------------------------
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 — Qt override
+        if self._extract_xlsx_path(event) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dragMoveEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 — Qt override
+        if self._extract_xlsx_path(event) is not None:
+            event.acceptProposedAction()
+        else:
+            event.ignore()
+
+    def dropEvent(self, event: QDropEvent) -> None:  # noqa: N802 — Qt override
+        path = self._extract_xlsx_path(event)
+        if path is None:
+            event.ignore()
+            return
+        event.acceptProposedAction()
+        self._on_import(initial=path)
+
+    @staticmethod
+    def _extract_xlsx_path(event) -> Path | None:
+        md = event.mimeData() if hasattr(event, "mimeData") else None
+        if md is None or not md.hasUrls():
+            return None
+        for url in md.urls():
+            if not url.isLocalFile():
+                continue
+            p = Path(url.toLocalFile())
+            if p.suffix.lower() in (".xlsx", ".xlsm"):
+                return p
+        return None
 
     def _on_double_clicked(self, index) -> None:
         if self._project is None or not index.isValid():
