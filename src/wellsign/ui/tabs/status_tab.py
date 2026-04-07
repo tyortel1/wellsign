@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
+    QPushButton,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -33,9 +35,15 @@ from wellsign.db.investors import list_investors
 from wellsign.db.projects import ProjectRow
 from wellsign.db.workflows import (
     TrafficLight,
+    advance_investor_stage,
     compute_pending_sends,
     compute_traffic_light,
+    get_active_run,
+    get_stage,
+    revert_investor_stage,
 )
+
+_INVESTOR_ID_ROLE = Qt.ItemDataRole.UserRole + 1
 
 _HEADERS = [
     "", "Investor", "Entity", "Stage", "Days In", "SLA", "Remaining", "Next Email", "Status",
@@ -70,10 +78,23 @@ class StatusTab(QWidget):
         header.addWidget(title)
         header.addStretch(1)
 
+        self.revert_btn = QPushButton("← Revert")
+        self.revert_btn.setProperty("secondary", True)
+        self.revert_btn.setEnabled(False)
+        self.revert_btn.setToolTip("Move the selected investor back one stage")
+        self.revert_btn.clicked.connect(self._on_revert)
+        header.addWidget(self.revert_btn)
+
+        self.advance_btn = QPushButton("Advance Stage →")
+        self.advance_btn.setEnabled(False)
+        self.advance_btn.setToolTip("Complete the selected investor's current stage and start the next one")
+        self.advance_btn.clicked.connect(self._on_advance)
+        header.addWidget(self.advance_btn)
+
         subtitle = QLabel(
             "Per-investor dashboard: current stage, days in stage, SLA remaining, "
-            "and the next email due to go out. Sort the table by any column to find "
-            "the investors that need your attention first."
+            "and the next email due to go out. Select an investor and click "
+            "<b>Advance Stage →</b> to move them to the next stage of the workflow."
         )
         subtitle.setStyleSheet("color: #5b6473;")
         subtitle.setWordWrap(True)
@@ -89,7 +110,9 @@ class StatusTab(QWidget):
         self.table.setAlternatingRowColors(False)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setSortingEnabled(True)
+        self.table.itemSelectionChanged.connect(self._on_selection_changed)
         h = self.table.horizontalHeader()
         h.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         h.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
@@ -135,6 +158,7 @@ class StatusTab(QWidget):
             f.setBold(True)
             dot.setFont(f)
             dot.setToolTip(traffic.label)
+            dot.setData(_INVESTOR_ID_ROLE, inv.id)
             self.table.setItem(r, 0, dot)
 
             self.table.setItem(r, 1, QTableWidgetItem(inv.display_name))
@@ -188,6 +212,66 @@ class StatusTab(QWidget):
             f"<span style='color:#aab1bd;'><b>{counts['grey']}</b> not started</span>"
             f"  ·  <b>{len(investors)}</b> total"
         )
+
+    # ---- selection / advance --------------------------------------------
+    def _selected_investor_id(self) -> str | None:
+        items = self.table.selectedItems()
+        if not items:
+            return None
+        # The dot column (0) carries the investor id; find the dot cell in the
+        # selected row regardless of which column was physically clicked.
+        row = items[0].row()
+        dot = self.table.item(row, 0)
+        if dot is None:
+            return None
+        return dot.data(_INVESTOR_ID_ROLE)
+
+    def _on_selection_changed(self) -> None:
+        inv_id = self._selected_investor_id()
+        if not inv_id:
+            self.advance_btn.setEnabled(False)
+            self.revert_btn.setEnabled(False)
+            return
+        run = get_active_run(inv_id)
+        self.advance_btn.setEnabled(run is not None)
+        self.revert_btn.setEnabled(run is not None)
+
+    def _on_advance(self) -> None:
+        inv_id = self._selected_investor_id()
+        if not inv_id:
+            return
+        current = get_active_run(inv_id)
+        if current is None:
+            QMessageBox.information(
+                self,
+                "Not in a workflow",
+                "This investor isn't in an active workflow stage.",
+            )
+            return
+        current_stage = get_stage(current.stage_id) if current else None
+        current_name = current_stage.name if current_stage else "(unknown)"
+        new_run = advance_investor_stage(inv_id)
+        if new_run is None:
+            QMessageBox.information(
+                self,
+                "Workflow complete",
+                f"Completed stage '{current_name}'. This investor has finished "
+                f"the workflow.",
+            )
+        self.refresh()
+
+    def _on_revert(self) -> None:
+        inv_id = self._selected_investor_id()
+        if not inv_id:
+            return
+        new_run = revert_investor_stage(inv_id)
+        if new_run is None:
+            QMessageBox.information(
+                self,
+                "Cannot revert",
+                "This investor is already on the first stage of the workflow.",
+            )
+        self.refresh()
 
     # ---- helpers ---------------------------------------------------------
     def _pending_map(self) -> dict[str, tuple[str, str]]:

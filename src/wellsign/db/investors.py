@@ -15,6 +15,7 @@ from datetime import datetime
 
 from wellsign.app_paths import investor_dir
 from wellsign.db.migrate import connect
+from wellsign.util.audit import log_action
 from wellsign.util.crypto import encrypt_pii
 
 
@@ -196,6 +197,20 @@ def insert_investor(
 
     result = get_investor(new_id)
     assert result is not None
+    log_action(
+        "investor_added",
+        project_id=project_id,
+        investor_id=new_id,
+        target_type="investor",
+        target_id=new_id,
+        metadata={
+            "has_entity": bool(entity_name),
+            "has_email": bool(email),
+            "wi_percent": wi_percent,
+            "has_ssn": ssn is not None and ssn != "",
+            "has_bank_info": bool(bank_routing),
+        },
+    )
     return result
 
 
@@ -292,10 +307,30 @@ def update_investor(
 
     result = get_investor(investor_id)
     assert result is not None
+    pii_touched = any(
+        p is not None for p in (ssn, ein, bank_name, bank_routing, bank_account)
+    )
+    log_action(
+        "investor_updated",
+        project_id=result.project_id,
+        investor_id=investor_id,
+        target_type="investor",
+        target_id=investor_id,
+        metadata={"wi_percent": wi_percent, "pii_touched": pii_touched},
+    )
     return result
 
 
 def delete_investor(investor_id: str) -> None:
+    existing = get_investor(investor_id)
     with connect() as conn:
         conn.execute("DELETE FROM investors WHERE id = ?", (investor_id,))
         conn.commit()
+    if existing is not None:
+        log_action(
+            "investor_deleted",
+            project_id=existing.project_id,
+            investor_id=investor_id,
+            target_type="investor",
+            target_id=investor_id,
+        )

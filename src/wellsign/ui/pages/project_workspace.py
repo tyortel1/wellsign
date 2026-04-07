@@ -26,7 +26,9 @@ from wellsign.ui.tabs import (
     CostsTab,
     DocumentsTab,
     InvestorsTab,
+    PaymentsTab,
     ProjectSetupTab,
+    ReconcileTab,
     SendTab,
     StatusTab,
 )
@@ -110,6 +112,8 @@ class ProjectWorkspace(QWidget):
         self.send_tab = SendTab()
         self.status_tab = StatusTab()
         self.costs_tab = CostsTab()
+        self.payments_tab = PaymentsTab()
+        self.reconcile_tab = ReconcileTab()
         self.burndown_tab = BurndownTab()
 
         self.tabs.addTab(self.setup_tab,     "Project Setup")
@@ -118,6 +122,8 @@ class ProjectWorkspace(QWidget):
         self.tabs.addTab(self.send_tab,      "Send")
         self.tabs.addTab(self.status_tab,    "Status")
         self.tabs.addTab(self.costs_tab,     "Costs")
+        self.tabs.addTab(self.payments_tab,  "Payments")
+        self.tabs.addTab(self.reconcile_tab, "Reconcile")
         self.tabs.addTab(self.burndown_tab,  "Burndown")
 
         outer.addWidget(self.tabs, 1)
@@ -141,6 +147,8 @@ class ProjectWorkspace(QWidget):
         self.send_tab.set_project(project)
         self.status_tab.set_project(project)
         self.costs_tab.set_project(project)
+        self.payments_tab.set_project(project)
+        self.reconcile_tab.set_project(project)
         self.burndown_tab.set_project(project)
 
     # ---- phase banner ---------------------------------------------------

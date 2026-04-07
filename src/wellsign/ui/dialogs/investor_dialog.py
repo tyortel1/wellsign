@@ -38,6 +38,7 @@ from wellsign.db.investors import (
     insert_investor,
     update_investor,
 )
+from wellsign.db.payments import ensure_payments_for_investor
 from wellsign.db.projects import ProjectRow, get_project_totals
 from wellsign.db.workflows import start_workflow_for_investor
 from wellsign.util.calc import compute_amounts
@@ -469,6 +470,13 @@ class InvestorDialog(QDialog):
                 bank_account=self.bank_account_field.value_for_save(),
                 **common,
             )
+
+        # Create or refresh LLG + DHC payment rows so the Payments tab tracks
+        # this investor automatically. Already-received rows are preserved;
+        # only ``expected`` status rows get their amount refreshed.
+        if self._saved is not None:
+            ensure_payments_for_investor(self._saved)
+
         self.accept()
 
     @property

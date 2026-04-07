@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from wellsign import __version__
 from wellsign.app_paths import database_path
-from wellsign.ui.dialogs import NewProjectDialog
+from wellsign.ui.dialogs import AboutDialog, NewProjectDialog
 from wellsign.ui.navigator import NavigatorTree, NavKind, NavSelection
 from wellsign.ui.pages import (
     DashboardPage,
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.resize(1380, 860)
         self.setMinimumSize(1100, 700)
 
+        self._build_menubar()
         self._build_toolbar()
         self._build_central()
         self._build_statusbar()
@@ -57,6 +58,34 @@ class MainWindow(QMainWindow):
 
         # Trigger initial selection so the right pane shows something useful.
         self.navigator.refresh_projects()
+
+    # ---- menu bar -------------------------------------------------------
+    def _build_menubar(self) -> None:
+        from PySide6.QtGui import QAction
+
+        bar = self.menuBar()
+
+        file_menu = bar.addMenu("&File")
+        new_action = QAction("&New Project…", self)
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self._open_new_project_dialog)
+        file_menu.addAction(new_action)
+        file_menu.addSeparator()
+        quit_action = QAction("E&xit", self)
+        quit_action.setShortcut("Ctrl+Q")
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
+
+        help_menu = bar.addMenu("&Help")
+        about_action = QAction("&About WellSign…", self)
+        about_action.triggered.connect(self._open_about_dialog)
+        help_menu.addAction(about_action)
+        licenses_action = QAction("&Licenses…", self)
+        licenses_action.triggered.connect(self._open_about_dialog)
+        help_menu.addAction(licenses_action)
+
+    def _open_about_dialog(self) -> None:
+        AboutDialog(self).exec()
 
     # ---- toolbar --------------------------------------------------------
     def _build_toolbar(self) -> None:

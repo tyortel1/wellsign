@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from wellsign.db.migrate import connect
+from wellsign.util.audit import log_action
 
 
 @dataclass
@@ -135,6 +136,18 @@ def record_generated_document(
         row = conn.execute(
             "SELECT * FROM investor_documents WHERE id = ?", (new_id,)
         ).fetchone()
+    log_action(
+        "packet_generated",
+        project_id=project_id,
+        investor_id=investor_id,
+        target_type="investor_document",
+        target_id=new_id,
+        metadata={
+            "doc_type": doc_type,
+            "template_id": (metadata or {}).get("template_id"),
+            "byte_size": byte_size,
+        },
+    )
     return _row_to_doc(row)
 
 

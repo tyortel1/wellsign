@@ -419,6 +419,82 @@ def complete_run(run_id: str) -> None:
         conn.commit()
 
 
+def set_run_status(run_id: str, status: str, notes: str | None = None) -> None:
+    """Force-set a run's status — used by Mark Blocked / Skip actions."""
+    now = datetime.utcnow().isoformat(timespec="seconds")
+    with connect() as conn:
+        if status == "completed":
+            conn.execute(
+                "UPDATE investor_stage_runs SET status = ?, completed_at = ?, notes = ? "
+                " WHERE id = ?",
+                (status, now, notes, run_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE investor_stage_runs SET status = ?, notes = ? WHERE id = ?",
+                (status, notes, run_id),
+            )
+        conn.commit()
+
+
+def advance_investor_stage(investor_id: str) -> StageRunRow | None:
+    """Complete the investor's current stage run and start the next stage.
+
+    Returns the new stage run, or ``None`` if the investor was already on the
+    final stage of the workflow (in which case we only complete the current run).
+    """
+    current = get_active_run(investor_id)
+    if current is None:
+        return None
+
+    current_stage = get_stage(current.stage_id)
+    if current_stage is None:
+        complete_run(current.id)
+        return None
+
+    stages = list_stages(current_stage.workflow_id)
+    next_stage: StageRow | None = None
+    for i, s in enumerate(stages):
+        if s.id == current.stage_id and i + 1 < len(stages):
+            next_stage = stages[i + 1]
+            break
+
+    complete_run(current.id)
+
+    if next_stage is None:
+        return None
+
+    return insert_stage_run(
+        investor_id=investor_id,
+        project_id=current.project_id,
+        stage_id=next_stage.id,
+    )
+
+
+def revert_investor_stage(investor_id: str) -> StageRunRow | None:
+    """Move the investor back one stage. Opposite of advance_investor_stage."""
+    current = get_active_run(investor_id)
+    if current is None:
+        return None
+    current_stage = get_stage(current.stage_id)
+    if current_stage is None:
+        return None
+    stages = list_stages(current_stage.workflow_id)
+    prev_stage: StageRow | None = None
+    for i, s in enumerate(stages):
+        if s.id == current.stage_id and i > 0:
+            prev_stage = stages[i - 1]
+            break
+    if prev_stage is None:
+        return None
+    set_run_status(current.id, "skipped")
+    return insert_stage_run(
+        investor_id=investor_id,
+        project_id=current.project_id,
+        stage_id=prev_stage.id,
+    )
+
+
 def _to_run(row: sqlite3.Row) -> StageRunRow:
     return StageRunRow(
         id=row["id"],

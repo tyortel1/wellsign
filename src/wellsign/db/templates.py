@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from wellsign.db.migrate import connect
+from wellsign.util.audit import log_action
 
 
 # ---------------------------------------------------------------------------
@@ -64,6 +65,12 @@ def update_doc_template_mapping(template_id: str, mapping: dict[str, str]) -> No
             (payload, now, template_id),
         )
         conn.commit()
+    log_action(
+        "template_mapping_updated",
+        target_type="document_template",
+        target_id=template_id,
+        metadata={"field_count": len(mapping)},
+    )
 
 
 def list_doc_templates() -> list[DocTemplateRow]:
@@ -135,6 +142,12 @@ def insert_doc_template(
         row = conn.execute(
             "SELECT * FROM document_templates WHERE id = ?", (new_id,)
         ).fetchone()
+    log_action(
+        "template_uploaded",
+        target_type="document_template",
+        target_id=new_id,
+        metadata={"name": name, "doc_type": doc_type, "page_size": page_size},
+    )
     return _row_to_doc_template(row)
 
 

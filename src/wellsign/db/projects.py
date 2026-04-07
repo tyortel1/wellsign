@@ -187,6 +187,13 @@ def set_phase(project_id: str, new_phase: str) -> None:
             (new_phase, now, now, project_id),
         )
         conn.commit()
+    log_action(
+        "phase_advanced",
+        project_id=project_id,
+        target_type="project",
+        target_id=project_id,
+        metadata={"new_phase": new_phase},
+    )
 
 
 def update_project(
@@ -202,7 +209,7 @@ def update_project(
     close_deadline: str | None,
     total_llg_cost: float | None,
     total_dhc_cost: float | None,
-) -> ProjectRow:
+) -> "ProjectRow":
     """Update editable project fields. License + workflow + phase are NOT touched.
 
     Used by EditProjectDialog. License binding is immutable after creation;
@@ -245,4 +252,16 @@ def update_project(
         conn.commit()
     result = get_project(project_id)
     assert result is not None
+    log_action(
+        "project_updated",
+        project_id=project_id,
+        target_type="project",
+        target_id=project_id,
+        metadata={
+            "name": name,
+            "well_name": well_name,
+            "total_llg_cost": total_llg_cost,
+            "total_dhc_cost": total_dhc_cost,
+        },
+    )
     return result
