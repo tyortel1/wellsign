@@ -378,19 +378,15 @@ def start_workflow_for_investor(investor_id: str, project_id: str) -> StageRunRo
     """Kick off the project's default workflow for a brand-new investor.
 
     Looks up the project's ``workflow_id``, finds the first stage of that
-    workflow, and inserts a stage run putting the investor at stage 1 with
-    ``entered_at = now``. Returns ``None`` if the project has no workflow,
-    if the workflow has no stages, or if the investor is already in an
-    active stage run.
-
-    Used by InvestorDialog after a successful insert and by any future
-    bulk-import code.
+    workflow, inserts a stage run, and auto-generates that stage's docs
+    for the investor (idempotent). Returns ``None`` if the project has no
+    workflow, if the workflow has no stages, or if the investor is already
+    in an active stage run.
     """
-    # Deferred imports to avoid circular dependencies with db/projects.py
     from wellsign.db.projects import get_project
 
     if get_active_run(investor_id) is not None:
-        return None  # already running — don't double-start
+        return None
 
     project = get_project(project_id)
     if project is None or not project.workflow_id:
@@ -400,11 +396,14 @@ def start_workflow_for_investor(investor_id: str, project_id: str) -> StageRunRo
     if not stages:
         return None
 
-    return insert_stage_run(
+    new_run = insert_stage_run(
         investor_id=investor_id,
         project_id=project_id,
         stage_id=stages[0].id,
     )
+
+    _auto_generate_stage_docs(project, investor_id, stages[0])
+    return new_run
 
 
 def complete_run(run_id: str) -> None:
@@ -440,9 +439,13 @@ def set_run_status(run_id: str, status: str, notes: str | None = None) -> None:
 def advance_investor_stage(investor_id: str) -> StageRunRow | None:
     """Complete the investor's current stage run and start the next stage.
 
-    Returns the new stage run, or ``None`` if the investor was already on the
-    final stage of the workflow (in which case we only complete the current run).
+    On a successful advance, also auto-generates the new stage's documents
+    for the investor (idempotent — see pdf_/stage_generator.py). Returns
+    the new stage run, or ``None`` if the investor was already on the
+    final stage of the workflow.
     """
+    from wellsign.db.projects import get_project
+
     current = get_active_run(investor_id)
     if current is None:
         return None
@@ -464,11 +467,36 @@ def advance_investor_stage(investor_id: str) -> StageRunRow | None:
     if next_stage is None:
         return None
 
-    return insert_stage_run(
+    new_run = insert_stage_run(
         investor_id=investor_id,
         project_id=current.project_id,
         stage_id=next_stage.id,
     )
+
+    project = get_project(current.project_id)
+    if project is not None:
+        _auto_generate_stage_docs(project, investor_id, next_stage)
+
+    return new_run
+
+
+def _auto_generate_stage_docs(project, investor_id: str, stage: "StageRow") -> None:
+    """Best-effort: generate this stage's docs for the investor.
+
+    Wrapped in a try/except so a generation failure (missing PDF, bad field
+    mapping, etc.) never blocks a stage transition. Failures are silent at
+    this layer — the Documents tab will surface them on next refresh.
+    """
+    try:
+        from wellsign.db.investors import get_investor
+        from wellsign.pdf_.stage_generator import generate_stage_docs
+
+        investor = get_investor(investor_id)
+        if investor is None:
+            return
+        generate_stage_docs(project, investor, stage)
+    except Exception:
+        pass
 
 
 def revert_investor_stage(investor_id: str) -> StageRunRow | None:

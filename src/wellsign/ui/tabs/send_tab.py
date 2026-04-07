@@ -39,8 +39,9 @@ from PySide6.QtWidgets import (
 from wellsign.db.investor_documents import list_for_investor
 from wellsign.db.projects import ProjectRow
 from wellsign.db.send_events import insert_send_event
-from wellsign.db.workflows import PendingSend, compute_pending_sends
+from wellsign.db.workflows import PendingSend, compute_pending_sends, get_stage
 from wellsign.email_.sender import build_mail_item, outlook_available
+from wellsign.pdf_.stage_generator import template_ids_for_stage
 from wellsign.ui.dialogs.help_dialog import HelpButton
 
 _HEADERS = ["", "Investor", "Stage", "Email Template", "Due", "Status"]
@@ -288,16 +289,31 @@ class SendTab(QWidget):
             )
             return
 
-        # Collect every generated PDF for this investor as attachments
+        # Filter attachments to ONLY the docs that belong to this email's
+        # workflow stage. The stage's stage_doc_templates rows define which
+        # PDFs accompany this email — anything else (e.g. docs from a later
+        # stage that haven't been "released" yet) is excluded.
+        stage = get_stage(ps.stage_id)
+        stage_template_ids = template_ids_for_stage(stage) if stage else set()
+
         docs = list_for_investor(ps.investor_id)
         attachment_paths: list[Path] = []
         attached_doc_ids: list[str] = []
         for d in docs:
-            if d.direction == "sent" and d.storage_path:
-                p = Path(d.storage_path)
-                if p.exists():
-                    attachment_paths.append(p)
-                    attached_doc_ids.append(d.id)
+            if d.direction != "sent" or not d.storage_path:
+                continue
+            # If this stage has explicit doc bindings, only attach matching
+            # template_ids. Stages with NO docs attached fall through to "send
+            # everything" so we don't break workflows that bind docs at the
+            # workflow level instead of the stage level.
+            if stage_template_ids:
+                doc_template_id = (d.metadata or {}).get("template_id")
+                if doc_template_id not in stage_template_ids:
+                    continue
+            p = Path(d.storage_path)
+            if p.exists():
+                attachment_paths.append(p)
+                attached_doc_ids.append(d.id)
 
         result = build_mail_item(
             to=ps.investor_email,
