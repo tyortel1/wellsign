@@ -1,5 +1,6 @@
 """Per-project tabs hosted inside the ProjectWorkspace page."""
 
+from .activity_tab import ActivityTab
 from .burndown_tab import BurndownTab
 from .costs_tab import CostsTab
 from .documents_tab import DocumentsTab
@@ -19,5 +20,6 @@ __all__ = [
     "CostsTab",
     "PaymentsTab",
     "ReconcileTab",
+    "ActivityTab",
     "BurndownTab",
 ]

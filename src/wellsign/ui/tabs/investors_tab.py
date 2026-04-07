@@ -23,6 +23,7 @@ from wellsign.db.investors import get_investor, list_investors
 from wellsign.db.projects import ProjectRow
 from wellsign.db.workflows import TrafficLight, compute_traffic_light
 from wellsign.ui.dialogs.import_investors_dialog import ImportInvestorsDialog
+from wellsign.ui.dialogs.investor_detail_dialog import InvestorDetailDialog
 from wellsign.ui.dialogs.investor_dialog import InvestorDialog
 
 _INVESTOR_ID_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -231,6 +232,7 @@ class InvestorsTab(QWidget):
         existing = get_investor(investor_id)
         if existing is None:
             return
-        dlg = InvestorDialog(self._project, parent=self, existing=existing)
-        if dlg.exec() and dlg.saved_investor is not None:
+        dlg = InvestorDetailDialog(self._project, existing, parent=self)
+        dlg.exec()
+        if dlg.refreshed:
             self.refresh()

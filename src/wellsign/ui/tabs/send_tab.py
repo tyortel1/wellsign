@@ -41,6 +41,7 @@ from wellsign.db.projects import ProjectRow
 from wellsign.db.send_events import insert_send_event
 from wellsign.db.workflows import PendingSend, compute_pending_sends
 from wellsign.email_.sender import build_mail_item, outlook_available
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 _HEADERS = ["", "Investor", "Stage", "Email Template", "Due", "Status"]
 
@@ -99,6 +100,7 @@ class SendTab(QWidget):
             )
         self.send_outlook_btn.clicked.connect(self._on_send_outlook)
         header.addWidget(self.send_outlook_btn)
+        header.addWidget(HelpButton("send"))
 
         subtitle = QLabel(
             "Every email that's due to go out to this project's investors based on the "

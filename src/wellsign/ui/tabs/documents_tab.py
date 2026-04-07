@@ -36,6 +36,7 @@ from wellsign.pdf_.fill import (
     output_filename,
     resolve_field_values,
 )
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 _HEADERS = ["Investor", "Doc type", "Template", "File", "Created"]
 _PATH_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -69,6 +70,7 @@ class DocumentsTab(QWidget):
         self.generate_btn.clicked.connect(self._on_generate)
         header.addWidget(self.regenerate_btn)
         header.addWidget(self.generate_btn)
+        header.addWidget(HelpButton("documents"))
 
         self.summary_label = QLabel("No project selected.")
         self.summary_label.setStyleSheet("color: #5b6473;")

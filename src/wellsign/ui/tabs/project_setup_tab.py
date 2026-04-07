@@ -23,6 +23,7 @@ from wellsign.db.workflows import (
     list_stages,
 )
 from wellsign.ui.dialogs.edit_project_dialog import EditProjectDialog
+from wellsign.ui.dialogs.help_dialog import HelpButton
 
 
 class ProjectSetupTab(QWidget):
@@ -77,6 +78,7 @@ class ProjectSetupTab(QWidget):
         self.edit_btn.setEnabled(False)
         self.edit_btn.clicked.connect(self._on_edit)
         title_row.addWidget(self.edit_btn)
+        title_row.addWidget(HelpButton("project_setup"))
         outer.addLayout(title_row)
 
         subtitle = QLabel(

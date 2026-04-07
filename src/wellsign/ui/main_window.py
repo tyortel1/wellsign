@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from wellsign import __version__
 from wellsign.app_paths import database_path
-from wellsign.ui.dialogs import AboutDialog, NewProjectDialog
+from wellsign.ui.dialogs import AboutDialog, HelpDialog, NewProjectDialog
 from wellsign.ui.navigator import NavigatorTree, NavKind, NavSelection
 from wellsign.ui.pages import (
     DashboardPage,
@@ -50,6 +50,7 @@ class MainWindow(QMainWindow):
         self.resize(1380, 860)
         self.setMinimumSize(1100, 700)
 
+        self._build_actions()
         self._build_menubar()
         self._build_toolbar()
         self._build_central()
@@ -59,33 +60,50 @@ class MainWindow(QMainWindow):
         # Trigger initial selection so the right pane shows something useful.
         self.navigator.refresh_projects()
 
-    # ---- menu bar -------------------------------------------------------
-    def _build_menubar(self) -> None:
+    # ---- actions (shared by toolbar + menu bar) ------------------------
+    def _build_actions(self) -> None:
         from PySide6.QtGui import QAction
 
+        self.new_project_action = QAction("+ New Project", self)
+        self.new_project_action.setShortcut("Ctrl+N")
+        self.new_project_action.setToolTip("Create a new well project (Ctrl+N)")
+        self.new_project_action.triggered.connect(self._open_new_project_dialog)
+
+        self.help_action = QAction("Help", self)
+        self.help_action.setShortcut("F1")
+        self.help_action.setToolTip("Open the WellSign help browser (F1)")
+        self.help_action.triggered.connect(self._open_help_dialog)
+
+        self.about_action = QAction("About WellSign…", self)
+        self.about_action.triggered.connect(self._open_about_dialog)
+
+        self.licenses_action = QAction("Licenses…", self)
+        self.licenses_action.triggered.connect(self._open_about_dialog)
+
+        self.quit_action = QAction("E&xit", self)
+        self.quit_action.setShortcut("Ctrl+Q")
+        self.quit_action.triggered.connect(self.close)
+
+    # ---- menu bar -------------------------------------------------------
+    def _build_menubar(self) -> None:
         bar = self.menuBar()
 
         file_menu = bar.addMenu("&File")
-        new_action = QAction("&New Project…", self)
-        new_action.setShortcut("Ctrl+N")
-        new_action.triggered.connect(self._open_new_project_dialog)
-        file_menu.addAction(new_action)
+        file_menu.addAction(self.new_project_action)
         file_menu.addSeparator()
-        quit_action = QAction("E&xit", self)
-        quit_action.setShortcut("Ctrl+Q")
-        quit_action.triggered.connect(self.close)
-        file_menu.addAction(quit_action)
+        file_menu.addAction(self.quit_action)
 
         help_menu = bar.addMenu("&Help")
-        about_action = QAction("&About WellSign…", self)
-        about_action.triggered.connect(self._open_about_dialog)
-        help_menu.addAction(about_action)
-        licenses_action = QAction("&Licenses…", self)
-        licenses_action.triggered.connect(self._open_about_dialog)
-        help_menu.addAction(licenses_action)
+        help_menu.addAction(self.help_action)
+        help_menu.addSeparator()
+        help_menu.addAction(self.about_action)
+        help_menu.addAction(self.licenses_action)
 
     def _open_about_dialog(self) -> None:
         AboutDialog(self).exec()
+
+    def _open_help_dialog(self) -> None:
+        HelpDialog(parent=self).exec()
 
     # ---- toolbar --------------------------------------------------------
     def _build_toolbar(self) -> None:
@@ -93,25 +111,12 @@ class MainWindow(QMainWindow):
         bar.setObjectName("TopBar")
         bar.setMovable(False)
         bar.setFloatable(False)
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
 
-        self.active_project_label = QLabel("")
-        self.active_project_label.setStyleSheet(
-            "color: #1f2430; font-weight: 600; font-size: 12pt;"
-        )
-        bar.addWidget(self.active_project_label)
-
-        spacer = QWidget()
-        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        bar.addWidget(spacer)
-
-        self.new_project_btn = QPushButton("+")
-        self.new_project_btn.setObjectName("NewProjectButton")
-        self.new_project_btn.setToolTip("New Project (Ctrl+N)")
-        self.new_project_btn.clicked.connect(self._open_new_project_dialog)
-        bar.addWidget(self.new_project_btn)
-
-        QShortcut(QKeySequence("Ctrl+N"), self, activated=self._open_new_project_dialog)
+        bar.addAction(self.new_project_action)
+        bar.addSeparator()
+        bar.addAction(self.help_action)
 
     # ---- central --------------------------------------------------------
     def _build_central(self) -> None:
@@ -185,31 +190,24 @@ class MainWindow(QMainWindow):
     # ---- handlers -------------------------------------------------------
     def _on_nav_selection(self, sel: NavSelection) -> None:
         if sel.kind == NavKind.PROJECTS_ROOT:
-            self.active_project_label.setText("All Projects")
             self.dashboard_page.refresh()
             self.stack.setCurrentWidget(self.dashboard_page)
         elif sel.kind == NavKind.PROJECT and sel.project is not None:
-            self.active_project_label.setText(sel.project.name)
             self.project_workspace.set_project(sel.project)
             self.stack.setCurrentWidget(self.project_workspace)
         elif sel.kind == NavKind.TEMPLATES_ROOT:
-            self.active_project_label.setText("Document Templates")
             self.doc_templates_page.refresh()
             self.stack.setCurrentWidget(self.doc_templates_page)
         elif sel.kind == NavKind.DOC_TEMPLATES:
-            self.active_project_label.setText("Document Templates")
             self.doc_templates_page.refresh()
             self.stack.setCurrentWidget(self.doc_templates_page)
         elif sel.kind == NavKind.EMAIL_TEMPLATES:
-            self.active_project_label.setText("Email Templates")
             self.email_templates_page.refresh()
             self.stack.setCurrentWidget(self.email_templates_page)
         elif sel.kind == NavKind.WORKFLOWS_ROOT:
-            self.active_project_label.setText("Workflows")
             self.workflows_page._load_first_workflow()
             self.stack.setCurrentWidget(self.workflows_page)
         elif sel.kind == NavKind.WORKFLOW and sel.workflow_id:
-            self.active_project_label.setText("Workflows")
             self.workflows_page.show_workflow(sel.workflow_id)
             self.stack.setCurrentWidget(self.workflows_page)
 

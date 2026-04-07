@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 from wellsign.db.phases import PHASES, info_for as phase_info_for, next_phase_options
 from wellsign.db.projects import ProjectRow, get_project, set_phase
 from wellsign.ui.tabs import (
+    ActivityTab,
     BurndownTab,
     CostsTab,
     DocumentsTab,
@@ -114,6 +115,7 @@ class ProjectWorkspace(QWidget):
         self.costs_tab = CostsTab()
         self.payments_tab = PaymentsTab()
         self.reconcile_tab = ReconcileTab()
+        self.activity_tab = ActivityTab()
         self.burndown_tab = BurndownTab()
 
         self.tabs.addTab(self.setup_tab,     "Project Setup")
@@ -124,6 +126,7 @@ class ProjectWorkspace(QWidget):
         self.tabs.addTab(self.costs_tab,     "Costs")
         self.tabs.addTab(self.payments_tab,  "Payments")
         self.tabs.addTab(self.reconcile_tab, "Reconcile")
+        self.tabs.addTab(self.activity_tab,  "Activity")
         self.tabs.addTab(self.burndown_tab,  "Burndown")
 
         outer.addWidget(self.tabs, 1)
@@ -149,6 +152,7 @@ class ProjectWorkspace(QWidget):
         self.costs_tab.set_project(project)
         self.payments_tab.set_project(project)
         self.reconcile_tab.set_project(project)
+        self.activity_tab.set_project(project)
         self.burndown_tab.set_project(project)
 
     # ---- phase banner ---------------------------------------------------

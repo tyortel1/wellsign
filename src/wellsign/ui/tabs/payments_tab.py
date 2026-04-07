@@ -42,6 +42,7 @@ from wellsign.db.payments import (
     totals_for_project,
 )
 from wellsign.db.projects import ProjectRow
+from wellsign.ui.dialogs.help_dialog import HelpButton
 from wellsign.ui.dialogs.payment_dialog import PaymentDialog
 
 _HEADERS = [
@@ -100,6 +101,7 @@ class PaymentsTab(QWidget):
         self.mark_btn.setEnabled(False)
         self.mark_btn.clicked.connect(self._on_mark_received)
         header.addWidget(self.mark_btn)
+        header.addWidget(HelpButton("payments"))
 
         subtitle = QLabel(
             "Per-investor incoming payment tracker. <b>LLG</b> wires/checks "
